@@ -1,0 +1,11 @@
+.dart_tool/
+build/
+.pub-cache/
+.pub/
+android/
+ios/
+windows/
+linux/
+macos/
+web/
+*.g.dart
