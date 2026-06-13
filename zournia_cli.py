@@ -657,7 +657,7 @@ class ZourniaCLI:
                         elif cmd == "/help":
                             print(f"\n{C_WHITE}Zournia CLI Commands:{C_RESET}")
                             print(f"  {C_GREEN}/chat{C_RESET}             Enter chat mode (You > prompt).")
-                            print(f"  {C_GREEN}/model [name]{C_RESET}     Switch active AI model (e.g. Gemini, Qwen, or custom name).")
+                            print(f"  {C_GREEN}/model{C_RESET}              Model manager (add/remove/switch/set keys)")
                             print(f"  {C_GREEN}/mode [normal|default|automation]{C_RESET} Switch chat mode.")
                             print(f"  {C_GREEN}/return{C_RESET}           Return to WORKSPACE_CORE.")
                             print(f"  {C_GREEN}/telemetry{C_RESET}        Print active environment diagnostics panel.")
@@ -683,13 +683,68 @@ class ZourniaCLI:
 
                         elif cmd == "/model":
                             if not arg:
-                                print(f"\nAvailable Models:")
-                                print(f"  - Gemini (google/gemini-2.5-flash) [active]" if self.selected_model == "Gemini" else "  - Gemini (google/gemini-2.5-flash)")
-                                print(f"  - Qwen (qwen/qwen-2.5-coder-32b-instruct) [active]" if self.selected_model == "Qwen" else "  - Qwen (qwen/qwen-2.5-coder-32b-instruct)")
-                                for m in self.custom_models:
-                                    name = m.get("name")
-                                    id_ = m.get("identifier")
-                                    print(f"  - {name} ({id_}) [active]" if self.selected_model == name else f"  - {name} ({id_})")
+                                print(f"\n{C_WHITE}--- MODEL MANAGER ---{C_RESET}")
+                                print(f"\n{C_CYAN}Built-in Models:{C_RESET}")
+                                print(f"  - Gemini (google/gemini-2.5-flash) {'[active]' if self.selected_model == 'Gemini' else ''}")
+                                print(f"  - Qwen (qwen/qwen-2.5-coder-32b-instruct) {'[active]' if self.selected_model == 'Qwen' else ''}")
+                                if self.custom_models:
+                                    print(f"\n{C_CYAN}Custom Models:{C_RESET}")
+                                    for m in self.custom_models:
+                                        name = m.get("name")
+                                        id_ = m.get("identifier")
+                                        print(f"  - {name} ({id_}) {'[active]' if self.selected_model == name else ''}")
+                                print(f"\n{C_CYAN}Commands:{C_RESET}")
+                                print(f"  {C_GREEN}/model <name>{C_RESET}              Switch active model")
+                                print(f"  {C_GREEN}/model add <name> <id>{C_RESET}     Add custom model (e.g. /model add llama meta-llama/llama-3-70b-instruct)")
+                                print(f"  {C_GREEN}/model remove <name>{C_RESET}       Remove a custom model")
+                                print(f"  {C_GREEN}/model key <provider> <key>{C_RESET} Set API key (e.g. /model key openrouter sk-or-v1-xxx)")
+                                print(f"  {C_GREEN}/model key{C_RESET}                 Show API key status")
+                                print()
+                            elif arg.startswith("add "):
+                                parts = arg[4:].strip().split(maxsplit=1)
+                                if len(parts) < 2:
+                                    print(f"{C_RED}Usage: /model add <name> <identifier>{C_RESET}")
+                                    print(f"Example: /model add llama meta-llama/llama-3-70b-instruct\n")
+                                else:
+                                    name = parts[0]
+                                    identifier = parts[1]
+                                    existing = [m for m in self.custom_models if m.get("name", "").lower() == name.lower()]
+                                    if existing:
+                                        existing[0]["identifier"] = identifier
+                                        print(f"{C_GREEN}Updated model '{name}' to {identifier}.{C_RESET}\n")
+                                    else:
+                                        self.custom_models.append({"name": name, "identifier": identifier})
+                                        print(f"{C_GREEN}Added model '{name}' ({identifier}).{C_RESET}\n")
+                                    self.save_configs()
+                            elif arg.startswith("remove "):
+                                name = arg[7:].strip()
+                                before = len(self.custom_models)
+                                self.custom_models = [m for m in self.custom_models if m.get("name", "").lower() != name.lower()]
+                                if len(self.custom_models) < before:
+                                    if self.selected_model.lower() == name.lower():
+                                        self.selected_model = "Gemini"
+                                    self.save_configs()
+                                    print(f"{C_GREEN}Removed model '{name}'. Switched to Gemini.{C_RESET}\n")
+                                else:
+                                    print(f"{C_RED}Model '{name}' not found.{C_RESET}\n")
+                            elif arg.startswith("key "):
+                                key_parts = arg[4:].strip().split(maxsplit=1)
+                                if len(key_parts) < 2:
+                                    print(f"{C_RED}Usage: /model key <provider> <key>{C_RESET}")
+                                    print(f"Example: /model key openrouter sk-or-v1-xxx\n")
+                                else:
+                                    provider = key_parts[0].strip()
+                                    key = key_parts[1].strip()
+                                    self.api_keys[provider] = key
+                                    self.save_configs()
+                                    print(f"{C_GREEN}API key for '{provider}' saved.{C_RESET}\n")
+                            elif arg == "key":
+                                print(f"\n{C_CYAN}API Key Status:{C_RESET}")
+                                for prov, key in self.api_keys.items():
+                                    masked = key[:8] + "..." + key[-4:] if len(key) > 16 else key
+                                    print(f"  {prov}: {masked}")
+                                if not self.api_keys:
+                                    print(f"  {C_GREY}No keys configured.{C_RESET}")
                                 print()
                             else:
                                 found = False
@@ -707,7 +762,7 @@ class ZourniaCLI:
                                 if found:
                                     print(f"Switched model to: {C_CYAN}{self.selected_model}{C_RESET}\n")
                                 else:
-                                    print(f"{C_RED}Error: Model '{arg}' not found.{C_RESET}\n")
+                                    print(f"{C_RED}Model '{arg}' not found. Use /model add to add it.{C_RESET}\n")
 
                         elif cmd == "/mode":
                             if arg.lower() in ["default", "automation", "normal"]:
