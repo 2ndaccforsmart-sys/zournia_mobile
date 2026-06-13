@@ -400,6 +400,7 @@ class ZourniaCLI:
                         print(f"\n{C_WHITE}Zournia CLI Commands:{C_RESET}")
                         print(f"  {C_GREEN}/model [name]{C_RESET}     Switch active AI model (e.g. Gemini, Qwen, or custom name).")
                         print(f"  {C_GREEN}/mode [normal|default|automation]{C_RESET} Switch chat mode.")
+                        print(f"  {C_GREEN}/return{C_RESET}           Return to WORKSPACE_CORE.")
                         print(f"  {C_GREEN}/telemetry{C_RESET}        Print active environment diagnostics panel.")
                         print(f"  {C_GREEN}/help{C_RESET}             Show this help menu.")
                         print(f"  {C_GREEN}/exit{C_RESET}             Close the client.\n")
@@ -456,6 +457,11 @@ class ZourniaCLI:
                         else:
                             print(f"Current mode: {C_CYAN}{self.chat_mode}{C_RESET}. Set with: /mode normal, /mode default, or /mode automation\n")
                     
+                    elif cmd == "/return":
+                        self.session_state["intentTracking"] = ""
+                        self.save_configs()
+                        print(f"{C_GREEN}Returned to WORKSPACE_CORE.{C_RESET}\n")
+                    
                     else:
                         print(f"{C_RED}Unknown command. Type /help for assistance.{C_RESET}\n")
 
@@ -469,7 +475,11 @@ class ZourniaCLI:
                     print(" " * 20, end="\r")
                     
                     # Print response
-                    print(f"{C_GREEN}zournia > {C_WHITE}{response}{C_RESET}\n")
+                    display_response = "\n".join(
+                        line for line in response.split("\n")
+                        if not line.strip().startswith("INTENT:")
+                    ).strip()
+                    print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
                     
                     chat_history.append(("user", prompt))
                     chat_history.append(("assistant", response))
