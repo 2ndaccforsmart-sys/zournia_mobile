@@ -244,9 +244,14 @@ class ZourniaCLI:
             return "EXECUTION BLOCKED: Command execution is prohibited by Zournia Security Jail."
 
         # Intercept URL-opening commands and use the dedicated opener
-        url_match = re.search(r'https?://[^\s"\']+', command)
+        url_match = re.search(r'"(https?://[^"]+)"', command)
+        if not url_match:
+            url_match = re.search(r"'(https?://[^']+)'", command)
+        if not url_match:
+            url_match = re.search(r'(https?://[^\s"\']+)', command)
         if url_match:
-            return self.open_url(url_match.group(0))
+            url_str = url_match.group(1).replace(" ", "%20")
+            return self.open_url(url_str)
 
         print(f"{C_YELLOW}Executing: {command}{C_RESET}")
         try:

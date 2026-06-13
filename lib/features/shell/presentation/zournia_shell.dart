@@ -1456,11 +1456,21 @@ class _ZourniaShellState extends State<ZourniaShell> {
           } else {
             final bool isMobile = !kIsWeb && !(Platform.isWindows || Platform.isMacOS || Platform.isLinux);
             if (isMobile) {
-              final urlPattern = RegExp('https?://[^\\s]+');
-              final urlMatch = urlPattern.firstMatch(command);
+              RegExp urlPattern = RegExp(r'"(https?://[^"]+)"');
+              var urlMatch = urlPattern.firstMatch(command);
+              if (urlMatch == null) {
+                urlPattern = RegExp(r"'(https?://[^']+)'");
+                urlMatch = urlPattern.firstMatch(command);
+              }
+              if (urlMatch == null) {
+                urlPattern = RegExp(r'''(https?://[^\s"']+)''');
+                urlMatch = urlPattern.firstMatch(command);
+              }
               if (urlMatch != null) {
                 try {
-                  final uri = Uri.parse(urlMatch.group(0)!);
+                  final rawUrl = urlMatch.group(1)!;
+                  final urlStr = rawUrl.replaceAll(' ', '%20');
+                  final uri = Uri.parse(urlStr);
                   if (await canLaunchUrl(uri)) {
                     await launchUrl(uri, mode: LaunchMode.externalApplication);
                     ackMsg = 'EXECUTION ACK: Opened ${uri.toString()} in browser.';
