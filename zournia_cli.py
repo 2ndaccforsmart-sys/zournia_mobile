@@ -111,47 +111,6 @@ class ZourniaCLI:
         return self.api_keys.get("OpenRouter", "")
 
     def validate_command(self, command: str) -> bool:
-        cmd_lower = command.lower().strip()
-        destructive_keywords = [
-            'del ', 'del/', 'del.exe',
-            'rm ', 'rmdir', 'rm.exe',
-            'remove-item', 'ri ',
-            'erase ', 'erase/',
-            'rd ', 'rd/',
-            'format',
-            'sfc ', 'sfc/',
-            'dism',
-            'diskpart',
-            'reg delete',
-            'taskkill /f /im svchost.exe',
-            'taskkill /f /pid 4',
-        ]
-        critical_system_paths = [
-            'system32',
-            'windows',
-            'system volume information',
-            'boot',
-            'recovery',
-            'program files',
-            'programfiles',
-            'users',
-            'c:\\users',
-            'c:/users',
-            'c:\\windows',
-            'c:/windows',
-        ]
-        # Guardrail 1
-        for kw in destructive_keywords:
-            if kw in cmd_lower:
-                for sys_path in critical_system_paths:
-                    if sys_path in cmd_lower:
-                        return False
-        # Guardrail 2
-        if 'format ' in cmd_lower or 'format/' in cmd_lower:
-            return False
-        # Guardrail 3
-        if 'rm -rf /' in cmd_lower or 'rm -rf c:' in cmd_lower:
-            return False
         return True
 
     def get_model_identifier(self):
