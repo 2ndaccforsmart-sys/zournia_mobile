@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import subprocess
+import re
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 import urllib.request
@@ -194,17 +195,54 @@ class ZourniaCLI:
             "- To search Google: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome\n"
         )
 
+    def open_url(self, url: str) -> str:
+        """Try multiple methods to open a URL in the browser."""
+        methods = [
+            ("termux-open", ["termux-open", url]),
+            ("termux-open-url", ["termux-open-url", url]),
+            ("xdg-open", ["xdg-open", url]),
+            ("am start", ["am", "start", "-a", "android.intent.action.VIEW", "-d", url, "com.android.chrome"]),
+            ("am start (generic)", ["am", "start", "-a", "android.intent.action.VIEW", "-d", url]),
+        ]
+        for name, cmd in methods:
+            try:
+                result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                if result.returncode == 0:
+                    return f"EXECUTION ACK: Opened {url} in browser via {name}."
+                else:
+                    err = result.stderr.strip()
+                    if err and "not found" not in err.lower() and "no such" not in err.lower():
+                        continue
+            except FileNotFoundError:
+                continue
+            except subprocess.TimeoutExpired:
+                return f"EXECUTION ACK: Opened {url} in browser via {name} (timeout, but likely launched)."
+            except Exception:
+                continue
+        # Last resort: shell string
+        try:
+            shell_cmd = f'am start -a android.intent.action.VIEW -d "{url}" com.android.chrome'
+            result = subprocess.run(["sh", "-c", shell_cmd], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                return f"EXECUTION ACK: Opened {url} in browser via sh am start."
+        except Exception:
+            pass
+        return f"Failed to open {url}: no working browser launcher found. Install termux-api (pkg install termux-api)."
+
     def execute_terminal_command(self, command: str) -> str:
         if not self.validate_command(command):
             return "EXECUTION BLOCKED: Command execution is prohibited by Zournia Security Jail."
 
+        # Intercept URL-opening commands and use the dedicated opener
+        url_match = re.search(r'https?://[^\s"\']+', command)
+        if url_match:
+            return self.open_url(url_match.group(0))
+
         print(f"{C_YELLOW}Executing: {command}{C_RESET}")
         try:
-            # Try parsing command name
             tokens = command.split()
             app_name = tokens[0].split('/')[-1] if tokens else "command"
 
-            # Start process
             process = subprocess.Popen(
                 command,
                 shell=True,
@@ -217,10 +255,8 @@ class ZourniaCLI:
             self.process_registry[app_name] = process.pid
             self.save_configs()
 
-            # Wait briefly to capture fast output
             time.sleep(0.5)
             
-            # Check if it finished or is running
             status = process.poll()
             if status is None:
                 return f"EXECUTION ACK: Command \"{command}\" triggered successfully. Process: \"{app_name}\" (PID: {process.pid}) is running in background."
@@ -409,6 +445,7 @@ class ZourniaCLI:
                     if prompt.startswith("/"):
                         cmd_parts = prompt.split(maxsplit=1)
                         cmd = cmd_parts[0].lower()
+                        arg = cmd_parts[1].strip() if len(cmd_parts) > 1 else ""
 
                         if cmd == "/exit" and arg == "all":
                             print(f"{C_YELLOW}Exiting Zournia CLI. Goodbye.{C_RESET}")
