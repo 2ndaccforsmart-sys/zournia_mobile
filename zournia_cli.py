@@ -3,6 +3,8 @@ import os
 import sys
 import json
 import subprocess
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 import urllib.request
 import urllib.error
 import time
@@ -44,18 +46,20 @@ class ZourniaCLI:
 
     def load_configs(self):
         # Load API Keys
-        if os.path.exists("api_keys.json"):
+        api_keys_path = os.path.join(SCRIPT_DIR, "api_keys.json")
+        if os.path.exists(api_keys_path):
             try:
-                with open("api_keys.json", "r") as f:
+                with open(api_keys_path, "r") as f:
                     self.api_keys = json.load(f)
             except Exception as e:
                 print(f"{C_RED}Error loading api_keys.json: {e}{C_RESET}")
         
         # Load legacy / single key
         if "OpenRouter" not in self.api_keys or not self.api_keys["OpenRouter"]:
-            if os.path.exists("api_key.txt"):
+            api_key_path = os.path.join(SCRIPT_DIR, "api_key.txt")
+            if os.path.exists(api_key_path):
                 try:
-                    with open("api_key.txt", "r") as f:
+                    with open(api_key_path, "r") as f:
                         key = f.read().strip()
                         if key:
                             self.api_keys["OpenRouter"] = key
@@ -63,35 +67,40 @@ class ZourniaCLI:
                     pass
 
         # Load Custom Models
-        if os.path.exists("custom_models.json"):
+        custom_models_path = os.path.join(SCRIPT_DIR, "custom_models.json")
+        if os.path.exists(custom_models_path):
             try:
-                with open("custom_models.json", "r") as f:
+                with open(custom_models_path, "r") as f:
                     self.custom_models = json.load(f)
             except Exception as e:
                 print(f"{C_RED}Error loading custom_models.json: {e}{C_RESET}")
 
         # Load Session State
-        if os.path.exists("session_state.json"):
+        session_state_path = os.path.join(SCRIPT_DIR, "session_state.json")
+        if os.path.exists(session_state_path):
             try:
-                with open("session_state.json", "r") as f:
+                with open(session_state_path, "r") as f:
                     self.session_state = json.load(f)
             except Exception as e:
                 pass
 
     def save_configs(self):
         try:
-            with open("api_keys.json", "w") as f:
+            api_keys_path = os.path.join(SCRIPT_DIR, "api_keys.json")
+            with open(api_keys_path, "w") as f:
                 json.dump(self.api_keys, f, indent=2)
             
             # Legacy sync
             if "OpenRouter" in self.api_keys:
-                with open("api_key.txt", "w") as f:
+                api_key_path = os.path.join(SCRIPT_DIR, "api_key.txt")
+                with open(api_key_path, "w") as f:
                     f.write(self.api_keys["OpenRouter"])
         except Exception as e:
             print(f"{C_RED}Error saving api_keys.json: {e}{C_RESET}")
 
         try:
-            with open("session_state.json", "w") as f:
+            session_state_path = os.path.join(SCRIPT_DIR, "session_state.json")
+            with open(session_state_path, "w") as f:
                 json.dump(self.session_state, f, indent=2)
         except Exception as e:
             pass
