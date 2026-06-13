@@ -301,6 +301,16 @@ class ZourniaCLI:
                 f"INTENT: User is executing a shell command\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
             )
+        elif self.chat_mode == "normal":
+            system_prompt = (
+                f"You are a casual, conversational AI assistant running on the user's {platform_name}. "
+                f"This is NORMAL mode — pure chat only. No automation, no command execution, no system calls. "
+                f"Act as human as possible: use a warm, casual, developer-to-developer conversational tone. "
+                f"Do NOT use assistant cliches like 'As an AI...', 'Certainly! I can help you with that'. Speak naturally, directly, and informally. "
+                f"You can discuss anything: coding, life, ideas, jokes, philosophy, whatever the user wants. "
+                f"NEVER output 'EXECUTE:', 'CLOSE:', or 'INTENT:' lines. Just talk normally.\n\n"
+                f"{session_state_str}\n\n{system_info_str}"
+            )
         else:
             system_prompt = (
                 f"You are a helpful coding and system assistant running on the user's {platform_name}. "
@@ -389,7 +399,7 @@ class ZourniaCLI:
                     elif cmd == "/help":
                         print(f"\n{C_WHITE}Zournia CLI Commands:{C_RESET}")
                         print(f"  {C_GREEN}/model [name]{C_RESET}     Switch active AI model (e.g. Gemini, Qwen, or custom name).")
-                        print(f"  {C_GREEN}/mode [default|automation]{C_RESET} Switch chat mode.")
+                        print(f"  {C_GREEN}/mode [normal|default|automation]{C_RESET} Switch chat mode.")
                         print(f"  {C_GREEN}/telemetry{C_RESET}        Print active environment diagnostics panel.")
                         print(f"  {C_GREEN}/help{C_RESET}             Show this help menu.")
                         print(f"  {C_GREEN}/exit{C_RESET}             Close the client.\n")
@@ -440,11 +450,11 @@ class ZourniaCLI:
                                 print(f"{C_RED}Error: Model '{arg}' not found.{C_RESET}\n")
 
                     elif cmd == "/mode":
-                        if arg.lower() in ["default", "automation"]:
+                        if arg.lower() in ["default", "automation", "normal"]:
                             self.chat_mode = arg.lower()
                             print(f"Chat mode set to: {C_CYAN}{self.chat_mode}{C_RESET}\n")
                         else:
-                            print(f"Current mode: {C_CYAN}{self.chat_mode}{C_RESET}. Set with: /mode default or /mode automation\n")
+                            print(f"Current mode: {C_CYAN}{self.chat_mode}{C_RESET}. Set with: /mode normal, /mode default, or /mode automation\n")
                     
                     else:
                         print(f"{C_RED}Unknown command. Type /help for assistance.{C_RESET}\n")
@@ -470,7 +480,10 @@ class ZourniaCLI:
                             self.session_state["intentTracking"] = line.replace("INTENT:", "").strip()
                             self.save_configs()
                         
-                        elif line.startswith("EXECUTE:"):
+                        if self.chat_mode == "normal":
+                            continue
+
+                        if line.startswith("EXECUTE:"):
                             cmd_to_run = line.replace("EXECUTE:", "").strip()
                             ack = self.execute_terminal_command(cmd_to_run)
                             print(f"{C_GREEN}{ack}{C_RESET}\n")
