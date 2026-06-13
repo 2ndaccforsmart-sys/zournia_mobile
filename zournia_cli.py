@@ -469,7 +469,7 @@ class ZourniaCLI:
                     print(" " * 20, end="\r")
                     
                     # Print response
-                    print(f"{C_GREEN}Zournia > {C_WHITE}{response}{C_RESET}\n")
+                    print(f"{C_GREEN}zournia > {C_WHITE}{response}{C_RESET}\n")
                     
                     chat_history.append(("user", prompt))
                     chat_history.append(("assistant", response))
