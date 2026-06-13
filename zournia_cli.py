@@ -461,6 +461,8 @@ class ZourniaCLI:
 
                 else:
                     # Normal chat response
+                    print()
+                    print(f"{C_CYAN}You > {C_WHITE}{prompt}{C_RESET}")
                     print(f"{C_GREY}Thinking...{C_RESET}", end="\r")
                     response = self.get_ai_response(prompt, chat_history)
                     # Clear "Thinking..."
