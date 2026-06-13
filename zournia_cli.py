@@ -163,6 +163,21 @@ class ZourniaCLI:
                 
         return "google/gemini-2.5-flash"
 
+    def clean_response(self, response):
+        cleaned_lines = []
+        for line in response.split("\n"):
+            stripped = line.strip().lstrip("`")
+            if stripped.startswith(("EXECUTE:", "CLOSE:")):
+                continue
+            # Also strip inline EXECUTE/CLOSE from the end of a line
+            for tag in ["EXECUTE:", "CLOSE:"]:
+                idx = line.find(tag)
+                if idx > 0:
+                    line = line[:idx].rstrip()
+            if line.strip():
+                cleaned_lines.append(line)
+        return "\n".join(cleaned_lines).strip()
+
     def get_system_info(self):
         home_dir = os.environ.get('HOME', '/data/data/com.termux/files/home')
         user = os.environ.get('USER', 'u0_a0')
@@ -415,10 +430,7 @@ class ZourniaCLI:
                     response = self.get_ai_response(prompt, chat_history)
                     print(" " * 20, end="\r")
 
-                    display_response = "\n".join(
-                        line for line in response.split("\n")
-                        if not line.strip().lstrip("`").startswith(("EXECUTE:", "CLOSE:"))
-                    ).strip()
+                    display_response = self.clean_response(response)
                     print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
 
                     chat_history.append(("user", prompt))
@@ -559,10 +571,7 @@ class ZourniaCLI:
                         response = self.get_ai_response(prompt, chat_history)
                         print(" " * 20, end="\r")
 
-                        display_response = "\n".join(
-                            line for line in response.split("\n")
-                            if not line.strip().lstrip("`").startswith(("EXECUTE:", "CLOSE:"))
-                        ).strip()
+                        display_response = self.clean_response(response)
                         print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
 
                         chat_history.append(("user", prompt))
@@ -592,10 +601,7 @@ class ZourniaCLI:
                                 print(f"{C_GREY}Thinking...{C_RESET}", end="\r")
                                 followup = self.get_ai_response("Now open the correct app based on the package list output above.", chat_history)
                                 print(" " * 20, end="\r")
-                                display_followup = "\n".join(
-                                    l for l in followup.split("\n")
-                                    if not l.strip().lstrip("`").startswith(("EXECUTE:", "CLOSE:"))
-                                ).strip()
+                                display_followup = self.clean_response(followup)
                                 print(f"{C_GREEN}zournia > {C_WHITE}{display_followup}{C_RESET}\n")
                                 chat_history.append(("assistant", followup))
                                 for l in followup.split("\n"):
