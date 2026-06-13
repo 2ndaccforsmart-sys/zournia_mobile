@@ -182,7 +182,7 @@ class ZourniaCLI:
             "- To search Google in a NEW Chrome tab: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome\n"
             "- To list installed apps: EXECUTE: pm list packages\n"
             "- To open file manager: EXECUTE: am start -n com.google.android.apps.nbu.files/.FileManagerActivity\n\n"
-            "CRITICAL: When the user asks to open an app, NEVER guess the package name. ALWAYS run 'EXECUTE: pm list packages' first to check what apps are actually installed, find the correct package name from the output, then open it.\n"
+            "CRITICAL: When the user asks to open an app, NEVER guess the package name. ALWAYS run 'EXECUTE: cmd package list packages -3' first to check what third-party apps are installed. If that fails, try 'EXECUTE: pm list packages'. Find the correct package name from the output, then open it.\n"
         )
 
     def execute_terminal_command(self, command: str) -> str:
@@ -299,13 +299,13 @@ class ZourniaCLI:
                 f"If the user asks you to perform a task (e.g. open a website, run a CLI command, open an app), you MUST first say a short natural sentence about what you are doing, then output the EXECUTE command on the next line. "
                 f"To open a NEW Chrome tab: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome "
                 f"To search Google: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome "
-                f"CRITICAL: When opening an app, NEVER guess the package name. ALWAYS run 'EXECUTE: pm list packages' first to find the correct package, then open it. "
+                f"CRITICAL: When opening an app, NEVER guess the package name. ALWAYS run 'EXECUTE: cmd package list packages -3' first to find the correct package. If that fails, try 'EXECUTE: pm list packages'. "
                 f"If the user asks to close an application or undo a launch, reply with {close_example}. "
                 f"If the user refers to 'it' or 'that process', resolve 'it' to the active TARGET_PID or process name from Session State. "
                 f"NEVER output 'INTENT:' lines. Just talk like a normal person.\n"
                 f"Example response:\n"
                 f"Let me check what apps you have installed.\n"
-                f"EXECUTE: pm list packages\n\n"
+                f"EXECUTE: cmd package list packages -3\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
             )
         elif self.chat_mode == "normal":
@@ -326,14 +326,14 @@ class ZourniaCLI:
                 f"If the user asks you to perform a task, you MUST first say a short natural sentence about what you are doing, then output the EXECUTE command on the next line. "
                 f"To open a NEW Chrome tab: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome "
                 f"To search Google: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome "
-                f"CRITICAL: When opening an app, NEVER guess the package name. ALWAYS run 'EXECUTE: pm list packages' first to find the correct package, then open it. "
+                f"CRITICAL: When opening an app, NEVER guess the package name. ALWAYS run 'EXECUTE: cmd package list packages -3' first to find the correct package. If that fails, try 'EXECUTE: pm list packages'. "
                 f"If the user asks to close an application or undo a launch, reply with {close_example}. "
                 f"If the user refers to 'it' or 'that process', resolve 'it' to the active TARGET_PID or process name from Session State. "
                 f"For vague requests like 'open a random website' or 'find me something', search Google for it. "
                 f"NEVER output 'INTENT:' lines. Just talk like a normal person.\n"
                 f"Example response:\n"
                 f"Let me check what apps you have installed.\n"
-                f"EXECUTE: pm list packages\n\n"
+                f"EXECUTE: cmd package list packages -3\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
             )
 
