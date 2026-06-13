@@ -333,15 +333,11 @@ class ZourniaCLI:
                 f"If the user asks you to perform a task (e.g. open a website, run a CLI command, open an app), you MUST first say a short natural sentence about what you are doing, then output the EXECUTE command on the next line. "
                 f"To open a NEW Chrome tab: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome "
                 f"To search Google: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome "
-                f"To open ANY app: EXECUTE: monkey -p <package> -c android.intent.category.LAUNCHER 1 (e.g. EXECUTE: monkey -p com.google.android.apps.gemini -c android.intent.category.LAUNCHER 1) "
-                f"If the user asks to close an application or undo a launch, reply with {close_example}. "
+                f"To open ANY app: EXECUTE: monkey -p <package> -c android.intent.category.LAUNCHER 1 "
                 f"If the user asks to close an application or undo a launch, reply with {close_example}. "
                 f"If the user refers to 'it' or 'that process', resolve 'it' to the active TARGET_PID or process name from Session State. "
-                f"NEVER output 'INTENT:' lines. Just talk like a normal person.\n"
-                f"Example response when user says 'open gemini':\n"
-                f"First message: 'Let me check what apps you have installed.' + EXECUTE: cmd package list packages\n"
-                f"Second message (after seeing output): 'Found it! Opening Gemini now.' + EXECUTE: am start -n <found_package>/<activity>\n"
-                f"You MUST send both messages in sequence. NEVER stop after listing packages.\n\n"
+                f"NEVER output 'INTENT:' lines. NEVER run 'pm list packages' or 'cmd package list packages'. Just use the package names from your knowledge or search Google. Just talk like a normal person.\n"
+                f"Example: user says 'open gemini', you say 'Opening Gemini for you.' then EXECUTE: monkey -p com.google.android.apps.gemini -c android.intent.category.LAUNCHER 1\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
             )
         elif self.chat_mode == "normal":
@@ -362,16 +358,12 @@ class ZourniaCLI:
                 f"If the user asks you to perform a task, you MUST first say a short natural sentence about what you are doing, then output the EXECUTE command on the next line. "
                 f"To open a NEW Chrome tab: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome "
                 f"To search Google: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome "
-                f"To open ANY app: EXECUTE: monkey -p <package> -c android.intent.category.LAUNCHER 1 (e.g. EXECUTE: monkey -p com.google.android.apps.gemini -c android.intent.category.LAUNCHER 1) "
-                f"If the user asks to close an application or undo a launch, reply with {close_example}. "
+                f"To open ANY app: EXECUTE: monkey -p <package> -c android.intent.category.LAUNCHER 1 "
                 f"If the user asks to close an application or undo a launch, reply with {close_example}. "
                 f"If the user refers to 'it' or 'that process', resolve 'it' to the active TARGET_PID or process name from Session State. "
                 f"For vague requests like 'open a random website' or 'find me something', search Google for it. "
-                f"NEVER output 'INTENT:' lines. Just talk like a normal person.\n"
-                f"Example response when user says 'open gemini':\n"
-                f"First message: 'Let me check what apps you have installed.' + EXECUTE: cmd package list packages\n"
-                f"Second message (after seeing output): 'Found it! Opening Gemini now.' + EXECUTE: am start -n <found_package>/<activity>\n"
-                f"You MUST send both messages in sequence. NEVER stop after listing packages.\n\n"
+                f"NEVER output 'INTENT:' lines. NEVER run 'pm list packages' or 'cmd package list packages'. Just use package names from your knowledge or search Google. Just talk like a normal person.\n"
+                f"Example: user says 'open gemini', you say 'Opening Gemini for you.' then EXECUTE: monkey -p com.google.android.apps.gemini -c android.intent.category.LAUNCHER 1\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
             )
 
@@ -442,6 +434,11 @@ class ZourniaCLI:
                         cmd_parts = prompt.split(maxsplit=1)
                         cmd = cmd_parts[0].lower()
 
+                        if cmd == "/exit" and arg == "all":
+                            print(f"{C_YELLOW}Exiting Zournia CLI. Goodbye.{C_RESET}")
+                            os.system("cd ~ && clear")
+                            break
+
                         if cmd in ["/return", "/exit", "/quit"]:
                             in_chat = False
                             print(f"{C_GREEN}Returned to WORKSPACE_CORE.{C_RESET}\n")
@@ -487,7 +484,11 @@ class ZourniaCLI:
                         arg = cmd_parts[1].strip() if len(cmd_parts) > 1 else ""
 
                         if cmd in ["/exit", "/quit"]:
-                            print(f"{C_YELLOW}Exiting Zournia CLI. Goodbye.{C_RESET}")
+                            if arg == "all":
+                                print(f"{C_YELLOW}Exiting Zournia CLI. Goodbye.{C_RESET}")
+                                os.system("cd ~ && clear")
+                            else:
+                                print(f"{C_YELLOW}Exiting Zournia CLI. Goodbye.{C_RESET}")
                             break
                         
                         elif cmd == "/chat":
@@ -502,7 +503,8 @@ class ZourniaCLI:
                             print(f"  {C_GREEN}/return{C_RESET}           Return to WORKSPACE_CORE.")
                             print(f"  {C_GREEN}/telemetry{C_RESET}        Print active environment diagnostics panel.")
                             print(f"  {C_GREEN}/help{C_RESET}             Show this help menu.")
-                            print(f"  {C_GREEN}/exit{C_RESET}             Close the client.\n")
+                            print(f"  {C_GREEN}/exit{C_RESET}             Return to WORKSPACE_CORE.")
+                            print(f"  {C_GREEN}/exit all{C_RESET}         Exit Zournia completely.\n")
                         
                         elif cmd == "/telemetry":
                             print(f"\n{C_WHITE}--- TELEMETRY DIAGNOSTIC PANEL ---{C_RESET}")
