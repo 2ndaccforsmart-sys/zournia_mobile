@@ -231,8 +231,8 @@ class ZourniaCLI:
 
         # Method 1: Python webbrowser (no external deps needed)
         try:
-            webbrowser.open(url)
-            return f"EXECUTION ACK: Opened {url} in browser."
+            if webbrowser.open(url):
+                return f"EXECUTION ACK: Opened {url} in browser."
         except Exception:
             pass
 
@@ -241,9 +241,13 @@ class ZourniaCLI:
             f'termux-open "{url}"',
             f'termux-open-url "{url}"',
             f'xdg-open "{url}"',
+            f'am start --allow-background-activity-starts -a android.intent.action.VIEW -d "{url}" com.android.chrome',
             f'am start -a android.intent.action.VIEW -d "{url}" com.android.chrome',
+            f'am start --allow-background-activity-starts -a android.intent.action.VIEW -d "{url}"',
             f'am start -a android.intent.action.VIEW -d "{url}"',
         ]
+        
+        errors = []
         for cmd_str in commands:
             try:
                 result = subprocess.run(
@@ -251,11 +255,30 @@ class ZourniaCLI:
                     capture_output=True, text=True, timeout=5
                 )
                 if result.returncode == 0:
+                    output_merged = (result.stdout + result.stderr).lower()
+                    if "blocked" in output_merged or "securityexception" in output_merged or "permission denied" in output_merged:
+                        errors.append(f"{cmd_str}: {output_merged.strip()}")
+                        continue
+                    if "activity not started" in output_merged and "brought to the front" not in output_merged:
+                        errors.append(f"{cmd_str}: {output_merged.strip()}")
+                        continue
                     return f"EXECUTION ACK: Opened {url} via {cmd_str.split()[0]}."
-            except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+                else:
+                    errors.append(f"{cmd_str}: exit code {result.returncode}. {result.stderr.strip() or result.stdout.strip()}")
+            except (FileNotFoundError, subprocess.TimeoutExpired, Exception) as e:
+                errors.append(f"{cmd_str}: {str(e)}")
                 continue
 
-        return f"Failed to open {url}. Try: pkg install termux-api"
+        xiaomi_warning = (
+            f"\n{C_RED}Xiaomi/MIUI/HyperOS Alert:{C_RESET} If Chrome did not launch, Xiaomi devices block background launches by default.\n"
+            f"Please resolve this by:\n"
+            f"1. Go to {C_WHITE}Settings -> Apps -> Manage Apps -> Termux -> Other Permissions{C_RESET}\n"
+            f"2. Enable {C_GREEN}\"Display pop-up windows while running in the background\"{C_RESET}\n"
+            f"3. In the same menu, set Battery Saver to {C_GREEN}\"No restrictions\"{C_RESET}."
+        )
+        
+        err_details = "\n".join([f" - {err}" for err in errors])
+        return f"Failed to open {url}. Detailed logs:\n{err_details}\n{xiaomi_warning}"
 
     def execute_terminal_command(self, command: str) -> str:
         if not self.validate_command(command):
