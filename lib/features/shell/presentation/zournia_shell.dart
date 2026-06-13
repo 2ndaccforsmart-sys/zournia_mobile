@@ -1842,7 +1842,8 @@ class _ZourniaShellState extends State<ZourniaShell> {
           "Termux/Android Commands:\n"
           "- To open a URL or website in the user's browser, use: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" (e.g. EXECUTE: am start -a android.intent.action.VIEW -d \"https://google.com\").\n"
           "- To open a URL specifically in Chrome, use: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome (e.g. EXECUTE: am start -a android.intent.action.VIEW -d \"https://google.com\" com.android.chrome).\n"
-          "- To search Google directly, use: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\"\n";
+          "- To search Google directly, use: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\"\n"
+          "- To launch any installed Android app by its package name, use the 'monkey' tool: EXECUTE: monkey -p <package_name> 1 (e.g., Discord: monkey -p com.discord 1, YouTube: monkey -p com.google.android.youtube 1, Chrome: monkey -p com.android.chrome 1). Do NOT use 'am start <package_name>' directly as it will fail without the exact activity class path.\n";
     }
 
     final userProfile = Platform.environment['USERPROFILE'] ?? 'C:\\Users\\Admin';
