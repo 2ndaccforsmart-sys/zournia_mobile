@@ -388,6 +388,8 @@ class ZourniaCLI:
 
                 if prompt.startswith("/"):
                     # Process slash commands
+                    print()
+                    print(f"{C_CYAN}You > {C_WHITE}{prompt}{C_RESET}")
                     cmd_parts = prompt.split(maxsplit=1)
                     cmd = cmd_parts[0].lower()
                     arg = cmd_parts[1].strip() if len(cmd_parts) > 1 else ""
