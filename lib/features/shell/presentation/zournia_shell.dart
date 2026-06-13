@@ -1487,30 +1487,53 @@ class _ZourniaShellState extends State<ZourniaShell> {
                   final launchMatch = launchRegex.firstMatch(command.trim());
                   if (launchMatch != null) {
                     final pkg = launchMatch.group(1)!;
-                    try {
-                      final res = await Process.run('cmd', ['package', 'resolve-activity', '--brief', pkg]);
-                      if (res.exitCode == 0) {
-                        final lines = res.stdout.toString().trim().split('\n');
-                        String? component;
-                        for (final line in lines) {
-                          if (line.contains('/') && !line.startsWith('priority=')) {
-                            component = line.trim();
-                            break;
-                          } else if (line.contains('/')) {
-                            final tokens = line.split(RegExp(r'\s+'));
-                            for (final token in tokens) {
-                              if (token.contains('/')) {
-                                component = token.trim();
-                                break;
+                    final popularApps = {
+                      'com.discord': 'com.discord/.main.MainDefault',
+                      'com.google.android.youtube': 'com.google.android.youtube/.app.honeycomb.Shell\$HomeActivity',
+                      'com.android.chrome': 'com.android.chrome/com.google.android.apps.chrome.Main',
+                      'com.whatsapp': 'com.whatsapp/.Main',
+                      'com.spotify.music': 'com.spotify.music/.MainActivity',
+                      'com.android.settings': 'com.android.settings/.Settings',
+                      'com.instagram.android': 'com.instagram.android/.activity.MainStartActivity',
+                      'com.google.android.gm': 'com.google.android.gm/.ConversationListActivity',
+                      'com.google.android.apps.maps': 'com.google.android.apps.maps/com.google.android.maps.MapsActivity',
+                      'com.telegram.messenger': 'org.telegram.messenger/org.telegram.ui.LaunchActivity',
+                      'org.telegram.messenger': 'org.telegram.messenger/org.telegram.ui.LaunchActivity',
+                    };
+                    if (popularApps.containsKey(pkg)) {
+                      finalCommand = 'am start -n ${popularApps[pkg]}';
+                    } else {
+                      try {
+                        final res = await Process.run('cmd', ['package', 'resolve-activity', '--brief', pkg]);
+                        if (res.exitCode == 0) {
+                          final lines = res.stdout.toString().trim().split('\n');
+                          String? component;
+                          for (final line in lines) {
+                            if (line.contains('/') && !line.startsWith('priority=')) {
+                              component = line.trim();
+                              break;
+                            } else if (line.contains('/')) {
+                              final tokens = line.split(RegExp(r'\s+'));
+                              for (final token in tokens) {
+                                if (token.contains('/')) {
+                                  component = token.trim();
+                                  break;
+                                }
                               }
                             }
                           }
+                          if (component != null) {
+                            finalCommand = 'am start -n $component';
+                          } else {
+                            finalCommand = 'am start -n $pkg/.MainActivity';
+                          }
+                        } else {
+                          finalCommand = 'am start -n $pkg/.MainActivity';
                         }
-                        if (component != null) {
-                          finalCommand = 'am start -n $component';
-                        }
+                      } catch (_) {
+                        finalCommand = 'am start -n $pkg/.MainActivity';
                       }
-                    } catch (_) {}
+                    }
                   }
                   final process = await Process.start('sh', ['-c', finalCommand]);
                   _sessionState.lastAction = 'EXECUTE: $command';
