@@ -262,6 +262,35 @@ class ZourniaCLI:
             url_str = url_match.group(1).replace(" ", "%20")
             return self.open_url(url_str)
 
+        # Intercept app launching commands
+        launch_match = re.search(r'(?:am start|monkey -p)\s+([a-zA-Z0-9._]+)(?:\s+1)?$', command.strip())
+        if launch_match:
+            pkg = launch_match.group(1)
+            # Try to resolve activity using cmd package
+            try:
+                res = subprocess.run(
+                    f"cmd package resolve-activity --brief {pkg}",
+                    shell=True, capture_output=True, text=True, timeout=3
+                )
+                if res.returncode == 0:
+                    lines = res.stdout.strip().splitlines()
+                    if lines:
+                        component = None
+                        for line in lines:
+                            if "/" in line and not line.startswith("priority="):
+                                component = line.strip()
+                                break
+                            elif "/" in line:
+                                tokens = line.split()
+                                for token in tokens:
+                                    if "/" in token:
+                                        component = token.strip()
+                                        break
+                        if component:
+                            command = f"am start -n {component}"
+            except Exception:
+                pass
+
         print(f"{C_YELLOW}Executing: {command}{C_RESET}")
         try:
             tokens = command.split()

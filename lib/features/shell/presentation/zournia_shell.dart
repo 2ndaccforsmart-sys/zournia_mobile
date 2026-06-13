@@ -1482,7 +1482,37 @@ class _ZourniaShellState extends State<ZourniaShell> {
                 }
               } else {
                 try {
-                  final process = await Process.start('sh', ['-c', command]);
+                  String finalCommand = command;
+                  final launchRegex = RegExp(r'(?:am start|monkey -p)\s+([a-zA-Z0-9._]+)(?:\s+1)?$');
+                  final launchMatch = launchRegex.firstMatch(command.trim());
+                  if (launchMatch != null) {
+                    final pkg = launchMatch.group(1)!;
+                    try {
+                      final res = await Process.run('cmd', ['package', 'resolve-activity', '--brief', pkg]);
+                      if (res.exitCode == 0) {
+                        final lines = res.stdout.toString().trim().split('\n');
+                        String? component;
+                        for (final line in lines) {
+                          if (line.contains('/') && !line.startsWith('priority=')) {
+                            component = line.trim();
+                            break;
+                          } else if (line.contains('/')) {
+                            final tokens = line.split(RegExp(r'\s+'));
+                            for (final token in tokens) {
+                              if (token.contains('/')) {
+                                component = token.trim();
+                                break;
+                              }
+                            }
+                          }
+                        }
+                        if (component != null) {
+                          finalCommand = 'am start -n $component';
+                        }
+                      }
+                    } catch (_) {}
+                  }
+                  final process = await Process.start('sh', ['-c', finalCommand]);
                   _sessionState.lastAction = 'EXECUTE: $command';
                   _sessionState.targetPid = process.pid;
                   await _saveSessionState();
