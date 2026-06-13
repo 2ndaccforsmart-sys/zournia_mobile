@@ -379,121 +379,44 @@ class ZourniaCLI:
         print(f"Type {C_GREEN}/help{C_RESET} to view commands.\n")
 
         chat_history = []
+        in_chat = False
 
         while True:
             try:
-                prompt = input(f"{C_GREEN}ZOURNIA // WORKSPACE_CORE > {C_RESET}").strip()
-                if not prompt:
-                    continue
+                if in_chat:
+                    prompt = input(f"{C_CYAN}You > {C_RESET}").strip()
+                    if not prompt:
+                        continue
 
-                if prompt.startswith("/"):
-                    # Process slash commands
-                    print()
-                    print(f"{C_CYAN}You > {C_WHITE}{prompt}{C_RESET}")
-                    cmd_parts = prompt.split(maxsplit=1)
-                    cmd = cmd_parts[0].lower()
-                    arg = cmd_parts[1].strip() if len(cmd_parts) > 1 else ""
+                    if prompt.startswith("/"):
+                        cmd_parts = prompt.split(maxsplit=1)
+                        cmd = cmd_parts[0].lower()
 
-                    if cmd in ["/exit", "/quit"]:
-                        print(f"{C_YELLOW}Exiting Zournia CLI. Goodbye.{C_RESET}")
-                        break
-                    
-                    elif cmd == "/help":
-                        print(f"\n{C_WHITE}Zournia CLI Commands:{C_RESET}")
-                        print(f"  {C_GREEN}/model [name]{C_RESET}     Switch active AI model (e.g. Gemini, Qwen, or custom name).")
-                        print(f"  {C_GREEN}/mode [normal|default|automation]{C_RESET} Switch chat mode.")
-                        print(f"  {C_GREEN}/return{C_RESET}           Return to WORKSPACE_CORE.")
-                        print(f"  {C_GREEN}/telemetry{C_RESET}        Print active environment diagnostics panel.")
-                        print(f"  {C_GREEN}/help{C_RESET}             Show this help menu.")
-                        print(f"  {C_GREEN}/exit{C_RESET}             Close the client.\n")
-                    
-                    elif cmd == "/telemetry":
-                        print(f"\n{C_WHITE}--- TELEMETRY DIAGNOSTIC PANEL ---{C_RESET}")
-                        print(f"Model Selection: {self.selected_model} ({self.get_model_identifier()})")
-                        print(f"Chat Mode: {self.chat_mode}")
-                        print(f"API Key Installed: {'Yes' if self.get_api_key() else 'No'}")
-                        print(f"Process Registry: {len(self.process_registry)} active process(es)")
-                        for name, pid in self.process_registry.items():
-                            print(f"  - {name}: PID {pid}")
-                        print(f"Session State:")
-                        print(f"  - Last Action: {self.session_state.get('lastAction')}")
-                        print(f"  - Target PID: {self.session_state.get('targetPid')}")
-                        print(f"  - Intent Tracking: {self.session_state.get('intentTracking')}")
-                        print(f"Environment Telemetry:")
-                        print(self.get_system_info().strip())
-                        print(f"{C_WHITE}----------------------------------{C_RESET}\n")
+                        if cmd in ["/return", "/exit", "/quit"]:
+                            in_chat = False
+                            print(f"{C_GREEN}Returned to WORKSPACE_CORE.{C_RESET}\n")
+                            continue
 
-                    elif cmd == "/model":
-                        if not arg:
-                            print(f"\nAvailable Models:")
-                            print(f"  - Gemini (google/gemini-2.5-flash) [active]" if self.selected_model == "Gemini" else "  - Gemini (google/gemini-2.5-flash)")
-                            print(f"  - Qwen (qwen/qwen-2.5-coder-32b-instruct) [active]" if self.selected_model == "Qwen" else "  - Qwen (qwen/qwen-2.5-coder-32b-instruct)")
-                            for m in self.custom_models:
-                                name = m.get("name")
-                                id_ = m.get("identifier")
-                                print(f"  - {name} ({id_}) [active]" if self.selected_model == name else f"  - {name} ({id_})")
-                            print()
-                        else:
-                            # Try to match
-                            found = False
-                            for k in DEFAULT_MODELS.keys():
-                                if arg.lower() == k.lower():
-                                    self.selected_model = k
-                                    found = True
-                                    break
-                            if not found:
-                                for m in self.custom_models:
-                                    if arg.lower() == m.get("name", "").lower():
-                                        self.selected_model = m.get("name")
-                                        found = True
-                                        break
-                            if found:
-                                print(f"Switched model to: {C_CYAN}{self.selected_model}{C_RESET}\n")
-                            else:
-                                print(f"{C_RED}Error: Model '{arg}' not found.{C_RESET}\n")
-
-                    elif cmd == "/mode":
-                        if arg.lower() in ["default", "automation", "normal"]:
-                            self.chat_mode = arg.lower()
-                            print(f"Chat mode set to: {C_CYAN}{self.chat_mode}{C_RESET}\n")
-                        else:
-                            print(f"Current mode: {C_CYAN}{self.chat_mode}{C_RESET}. Set with: /mode normal, /mode default, or /mode automation\n")
-                    
-                    elif cmd == "/return":
-                        self.session_state["intentTracking"] = ""
-                        self.save_configs()
-                        print(f"{C_GREEN}Returned to WORKSPACE_CORE.{C_RESET}\n")
-                    
-                    else:
-                        print(f"{C_RED}Unknown command. Type /help for assistance.{C_RESET}\n")
-
-                else:
-                    # Normal chat response
-                    print()
-                    print(f"{C_CYAN}You > {C_WHITE}{prompt}{C_RESET}")
                     print(f"{C_GREY}Thinking...{C_RESET}", end="\r")
                     response = self.get_ai_response(prompt, chat_history)
-                    # Clear "Thinking..."
                     print(" " * 20, end="\r")
-                    
-                    # Print response
+
                     display_response = "\n".join(
                         line for line in response.split("\n")
                         if not line.strip().startswith("INTENT:")
                     ).strip()
                     print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
-                    
+
                     chat_history.append(("user", prompt))
                     chat_history.append(("assistant", response))
 
-                    # Parse response lines for intent tracking or execution triggers
                     lines = response.split("\n")
                     for line in lines:
                         line = line.strip()
                         if line.startswith("INTENT:"):
                             self.session_state["intentTracking"] = line.replace("INTENT:", "").strip()
                             self.save_configs()
-                        
+
                         if self.chat_mode == "normal":
                             continue
 
@@ -508,6 +431,134 @@ class ZourniaCLI:
                             ack = self.terminate_process(target_to_close)
                             print(f"{C_GREEN}{ack}{C_RESET}\n")
                             chat_history.append(("user", f"Close confirmation received.\n\n{ack}"))
+
+                else:
+                    prompt = input(f"{C_GREEN}ZOURNIA // WORKSPACE_CORE > {C_RESET}").strip()
+                    if not prompt:
+                        continue
+
+                    if prompt.startswith("/"):
+                        print()
+                        print(f"{C_CYAN}You > {C_WHITE}{prompt}{C_RESET}")
+                        cmd_parts = prompt.split(maxsplit=1)
+                        cmd = cmd_parts[0].lower()
+                        arg = cmd_parts[1].strip() if len(cmd_parts) > 1 else ""
+
+                        if cmd in ["/exit", "/quit"]:
+                            print(f"{C_YELLOW}Exiting Zournia CLI. Goodbye.{C_RESET}")
+                            break
+                        
+                        elif cmd == "/chat":
+                            in_chat = True
+                            print(f"\n{C_GREEN}Entered chat mode. Type /return to go back to WORKSPACE_CORE.{C_RESET}\n")
+                        
+                        elif cmd == "/help":
+                            print(f"\n{C_WHITE}Zournia CLI Commands:{C_RESET}")
+                            print(f"  {C_GREEN}/chat{C_RESET}             Enter chat mode (You > prompt).")
+                            print(f"  {C_GREEN}/model [name]{C_RESET}     Switch active AI model (e.g. Gemini, Qwen, or custom name).")
+                            print(f"  {C_GREEN}/mode [normal|default|automation]{C_RESET} Switch chat mode.")
+                            print(f"  {C_GREEN}/return{C_RESET}           Return to WORKSPACE_CORE.")
+                            print(f"  {C_GREEN}/telemetry{C_RESET}        Print active environment diagnostics panel.")
+                            print(f"  {C_GREEN}/help{C_RESET}             Show this help menu.")
+                            print(f"  {C_GREEN}/exit{C_RESET}             Close the client.\n")
+                        
+                        elif cmd == "/telemetry":
+                            print(f"\n{C_WHITE}--- TELEMETRY DIAGNOSTIC PANEL ---{C_RESET}")
+                            print(f"Model Selection: {self.selected_model} ({self.get_model_identifier()})")
+                            print(f"Chat Mode: {self.chat_mode}")
+                            print(f"API Key Installed: {'Yes' if self.get_api_key() else 'No'}")
+                            print(f"Process Registry: {len(self.process_registry)} active process(es)")
+                            for name, pid in self.process_registry.items():
+                                print(f"  - {name}: PID {pid}")
+                            print(f"Session State:")
+                            print(f"  - Last Action: {self.session_state.get('lastAction')}")
+                            print(f"  - Target PID: {self.session_state.get('targetPid')}")
+                            print(f"  - Intent Tracking: {self.session_state.get('intentTracking')}")
+                            print(f"Environment Telemetry:")
+                            print(self.get_system_info().strip())
+                            print(f"{C_WHITE}----------------------------------{C_RESET}\n")
+
+                        elif cmd == "/model":
+                            if not arg:
+                                print(f"\nAvailable Models:")
+                                print(f"  - Gemini (google/gemini-2.5-flash) [active]" if self.selected_model == "Gemini" else "  - Gemini (google/gemini-2.5-flash)")
+                                print(f"  - Qwen (qwen/qwen-2.5-coder-32b-instruct) [active]" if self.selected_model == "Qwen" else "  - Qwen (qwen/qwen-2.5-coder-32b-instruct)")
+                                for m in self.custom_models:
+                                    name = m.get("name")
+                                    id_ = m.get("identifier")
+                                    print(f"  - {name} ({id_}) [active]" if self.selected_model == name else f"  - {name} ({id_})")
+                                print()
+                            else:
+                                found = False
+                                for k in DEFAULT_MODELS.keys():
+                                    if arg.lower() == k.lower():
+                                        self.selected_model = k
+                                        found = True
+                                        break
+                                if not found:
+                                    for m in self.custom_models:
+                                        if arg.lower() == m.get("name", "").lower():
+                                            self.selected_model = m.get("name")
+                                            found = True
+                                            break
+                                if found:
+                                    print(f"Switched model to: {C_CYAN}{self.selected_model}{C_RESET}\n")
+                                else:
+                                    print(f"{C_RED}Error: Model '{arg}' not found.{C_RESET}\n")
+
+                        elif cmd == "/mode":
+                            if arg.lower() in ["default", "automation", "normal"]:
+                                self.chat_mode = arg.lower()
+                                print(f"Chat mode set to: {C_CYAN}{self.chat_mode}{C_RESET}\n")
+                            else:
+                                print(f"Current mode: {C_CYAN}{self.chat_mode}{C_RESET}. Set with: /mode normal, /mode default, or /mode automation\n")
+                        
+                        elif cmd == "/return":
+                            self.session_state["intentTracking"] = ""
+                            self.save_configs()
+                            print(f"{C_GREEN}Already at WORKSPACE_CORE.{C_RESET}\n")
+                        
+                        else:
+                            print(f"{C_RED}Unknown command. Type /help for assistance.{C_RESET}\n")
+
+                    else:
+                        # Normal chat response from workspace prompt
+                        print()
+                        print(f"{C_CYAN}You > {C_WHITE}{prompt}{C_RESET}")
+                        print(f"{C_GREY}Thinking...{C_RESET}", end="\r")
+                        response = self.get_ai_response(prompt, chat_history)
+                        print(" " * 20, end="\r")
+
+                        display_response = "\n".join(
+                            line for line in response.split("\n")
+                            if not line.strip().startswith("INTENT:")
+                        ).strip()
+                        print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
+
+                        chat_history.append(("user", prompt))
+                        chat_history.append(("assistant", response))
+
+                        lines = response.split("\n")
+                        for line in lines:
+                            line = line.strip()
+                            if line.startswith("INTENT:"):
+                                self.session_state["intentTracking"] = line.replace("INTENT:", "").strip()
+                                self.save_configs()
+
+                            if self.chat_mode == "normal":
+                                continue
+
+                            if line.startswith("EXECUTE:"):
+                                cmd_to_run = line.replace("EXECUTE:", "").strip()
+                                ack = self.execute_terminal_command(cmd_to_run)
+                                print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                chat_history.append(("user", f"Execution confirmation received.\n\n{ack}"))
+
+                            elif line.startswith("CLOSE:"):
+                                target_to_close = line.replace("CLOSE:", "").strip()
+                                ack = self.terminate_process(target_to_close)
+                                print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                chat_history.append(("user", f"Close confirmation received.\n\n{ack}"))
 
             except KeyboardInterrupt:
                 print(f"\n{C_YELLOW}Use /exit to quit.{C_RESET}\n")
