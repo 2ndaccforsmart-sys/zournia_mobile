@@ -302,14 +302,14 @@ class ZourniaCLI:
             system_prompt = (
                 f"You are running in AUTOMATION mode on the user's {platform_name}. "
                 f"Chat in a casual, direct, developer-to-developer tone. Avoid robotic pleasantries or AI template-speak. "
-                f"If the user asks you to perform a task (e.g. open a website, run a CLI command, open an app), you MUST first state what you are going to do in a brief sentence, then output the EXECUTE command. "
+                f"If the user asks you to perform a task (e.g. open a website, run a CLI command, open an app), you MUST first say a short natural sentence about what you are doing, then output the EXECUTE command on the next line. "
                 f"To open a NEW Chrome tab: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome "
                 f"To search Google: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome "
                 f"To open an app: EXECUTE: am start -n <package>/<activity> "
                 f"If the user asks to close an application or undo a launch, reply with {close_example}. "
                 f"If the user refers to 'it' or 'that process', resolve 'it' to the active TARGET_PID or process name from Session State. "
+                f"NEVER output 'INTENT:' lines. Just talk like a normal person.\n"
                 f"Example response:\n"
-                f"INTENT: User wants to open YouTube\n"
                 f"Opening YouTube for you.\n"
                 f"EXECUTE: am start -n com.google.android.youtube/.HomeActivity\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
@@ -329,15 +329,15 @@ class ZourniaCLI:
                 f"You are a helpful coding and system assistant running on the user's {platform_name}. "
                 f"Act as human as possible: use a warm, casual, developer-to-developer conversational tone. Do NOT use assistant cliches like 'As an AI...', 'Certainly! I can help you with that'. Speak naturally, directly, and informally. "
                 f"You can chat normally, write code, explain concepts, and also execute system automation commands if the user requests them. "
-                f"If the user asks you to perform a task, you MUST first state what you are going to do in a brief sentence, then output the EXECUTE command. "
+                f"If the user asks you to perform a task, you MUST first say a short natural sentence about what you are doing, then output the EXECUTE command on the next line. "
                 f"To open a NEW Chrome tab: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome "
                 f"To search Google: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome "
                 f"To open an app: EXECUTE: am start -n <package>/<activity> "
                 f"If the user asks to close an application or undo a launch, reply with {close_example}. "
                 f"If the user refers to 'it' or 'that process', resolve 'it' to the active TARGET_PID or process name from Session State. "
                 f"For vague requests like 'open a random website' or 'find me something', search Google for it. "
+                f"NEVER output 'INTENT:' lines. Just talk like a normal person.\n"
                 f"Example response:\n"
-                f"INTENT: User wants to browse random interesting websites\n"
                 f"Let me find some random interesting websites for you.\n"
                 f"EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=random+interesting+websites\" com.android.chrome\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
@@ -419,36 +419,27 @@ class ZourniaCLI:
                     response = self.get_ai_response(prompt, chat_history)
                     print(" " * 20, end="\r")
 
-                    display_response = "\n".join(
-                        line for line in response.split("\n")
-                        if not line.strip().startswith("INTENT:")
-                    ).strip()
-                    print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
+                    print(f"{C_GREEN}zournia > {C_WHITE}{response}{C_RESET}\n")
 
                     chat_history.append(("user", prompt))
                     chat_history.append(("assistant", response))
 
-                    lines = response.split("\n")
-                    for line in lines:
-                        line = line.strip()
-                        if line.startswith("INTENT:"):
-                            self.session_state["intentTracking"] = line.replace("INTENT:", "").strip()
-                            self.save_configs()
+                    if self.chat_mode != "normal":
+                        lines = response.split("\n")
+                        for line in lines:
+                            line = line.strip()
 
-                        if self.chat_mode == "normal":
-                            continue
+                            if line.startswith("EXECUTE:"):
+                                cmd_to_run = line.replace("EXECUTE:", "").strip()
+                                ack = self.execute_terminal_command(cmd_to_run)
+                                print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                chat_history.append(("user", f"Execution confirmation received.\n\n{ack}"))
 
-                        if line.startswith("EXECUTE:"):
-                            cmd_to_run = line.replace("EXECUTE:", "").strip()
-                            ack = self.execute_terminal_command(cmd_to_run)
-                            print(f"{C_GREEN}{ack}{C_RESET}\n")
-                            chat_history.append(("user", f"Execution confirmation received.\n\n{ack}"))
-
-                        elif line.startswith("CLOSE:"):
-                            target_to_close = line.replace("CLOSE:", "").strip()
-                            ack = self.terminate_process(target_to_close)
-                            print(f"{C_GREEN}{ack}{C_RESET}\n")
-                            chat_history.append(("user", f"Close confirmation received.\n\n{ack}"))
+                            elif line.startswith("CLOSE:"):
+                                target_to_close = line.replace("CLOSE:", "").strip()
+                                ack = self.terminate_process(target_to_close)
+                                print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                chat_history.append(("user", f"Close confirmation received.\n\n{ack}"))
 
                 else:
                     prompt = input(f"{C_GREEN}ZOURNIA // WORKSPACE_CORE > {C_RESET}").strip()
@@ -547,36 +538,27 @@ class ZourniaCLI:
                         response = self.get_ai_response(prompt, chat_history)
                         print(" " * 20, end="\r")
 
-                        display_response = "\n".join(
-                            line for line in response.split("\n")
-                            if not line.strip().startswith("INTENT:")
-                        ).strip()
-                        print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
+                        print(f"{C_GREEN}zournia > {C_WHITE}{response}{C_RESET}\n")
 
                         chat_history.append(("user", prompt))
                         chat_history.append(("assistant", response))
 
-                        lines = response.split("\n")
-                        for line in lines:
-                            line = line.strip()
-                            if line.startswith("INTENT:"):
-                                self.session_state["intentTracking"] = line.replace("INTENT:", "").strip()
-                                self.save_configs()
+                        if self.chat_mode != "normal":
+                            lines = response.split("\n")
+                            for line in lines:
+                                line = line.strip()
 
-                            if self.chat_mode == "normal":
-                                continue
+                                if line.startswith("EXECUTE:"):
+                                    cmd_to_run = line.replace("EXECUTE:", "").strip()
+                                    ack = self.execute_terminal_command(cmd_to_run)
+                                    print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                    chat_history.append(("user", f"Execution confirmation received.\n\n{ack}"))
 
-                            if line.startswith("EXECUTE:"):
-                                cmd_to_run = line.replace("EXECUTE:", "").strip()
-                                ack = self.execute_terminal_command(cmd_to_run)
-                                print(f"{C_GREEN}{ack}{C_RESET}\n")
-                                chat_history.append(("user", f"Execution confirmation received.\n\n{ack}"))
-
-                            elif line.startswith("CLOSE:"):
-                                target_to_close = line.replace("CLOSE:", "").strip()
-                                ack = self.terminate_process(target_to_close)
-                                print(f"{C_GREEN}{ack}{C_RESET}\n")
-                                chat_history.append(("user", f"Close confirmation received.\n\n{ack}"))
+                                elif line.startswith("CLOSE:"):
+                                    target_to_close = line.replace("CLOSE:", "").strip()
+                                    ack = self.terminate_process(target_to_close)
+                                    print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                    chat_history.append(("user", f"Close confirmation received.\n\n{ack}"))
 
             except KeyboardInterrupt:
                 print(f"\n{C_YELLOW}Use /exit to quit.{C_RESET}\n")
