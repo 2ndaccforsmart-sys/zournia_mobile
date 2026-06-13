@@ -177,7 +177,7 @@ class ZourniaCLI:
             "- To list directory contents, use: ls \"<path>\"\n"
             "- To launch or run terminal commands, output its path or name directly (e.g. EXECUTE: python script.py or EXECUTE: ls -la). Run commands directly so the Termux system can execute them.\n\n"
             "Termux/Android Commands:\n"
-            "- To open a URL or website in the user's browser, use: EXECUTE: termux-open \"<url>\" or termux-open-url \"<url>\" (e.g. EXECUTE: termux-open \"https://google.com\").\n"
+            "- To open a URL or website in a NEW Chrome tab, use: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome (e.g. EXECUTE: am start -a android.intent.action.VIEW -d \"https://google.com\" com.android.chrome). This forces a new tab even if Chrome is already running.\n"
         )
 
     def execute_terminal_command(self, command: str) -> str:
@@ -282,7 +282,7 @@ class ZourniaCLI:
 
         platform_name = "Android/Termux environment"
         shell_name = "Android shell"
-        yt_example = "termux-open https://youtube.com"
+        yt_example = "am start -a android.intent.action.VIEW -d \"https://youtube.com\" com.android.chrome"
         notepad_example = "ls -la"
         close_example = "'CLOSE: <process_name>' or 'EXECUTE: kill -9 <PID>'"
         taskkill_example = "kill -9 <TARGET_PID>"
