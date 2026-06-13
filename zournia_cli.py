@@ -182,7 +182,7 @@ class ZourniaCLI:
             "- To search Google in a NEW Chrome tab: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome\n"
             "- To list installed apps: EXECUTE: pm list packages\n"
             "- To open file manager: EXECUTE: am start -n com.google.android.apps.nbu.files/.FileManagerActivity\n\n"
-            "CRITICAL: When the user asks to open an app, NEVER guess the package name. ALWAYS run 'EXECUTE: cmd package list packages -3' first to check what third-party apps are installed. If that fails, try 'EXECUTE: pm list packages'. Find the correct package name from the output, then open it.\n"
+            "CRITICAL: When the user asks to open an app, NEVER guess the package name. ALWAYS run 'EXECUTE: cmd package list packages' first to see ALL installed apps (including system apps). Find the correct package name from the output, then immediately open it with a follow-up EXECUTE command. NEVER stop after just listing packages — you MUST open the app after finding its package.\n"
         )
 
     def execute_terminal_command(self, command: str) -> str:
@@ -299,13 +299,14 @@ class ZourniaCLI:
                 f"If the user asks you to perform a task (e.g. open a website, run a CLI command, open an app), you MUST first say a short natural sentence about what you are doing, then output the EXECUTE command on the next line. "
                 f"To open a NEW Chrome tab: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome "
                 f"To search Google: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome "
-                f"CRITICAL: When opening an app, NEVER guess the package name. ALWAYS run 'EXECUTE: cmd package list packages -3' first to find the correct package. If that fails, try 'EXECUTE: pm list packages'. "
+                f"CRITICAL: When opening an app, NEVER guess the package name. ALWAYS run 'EXECUTE: cmd package list packages' first (lists ALL apps including system apps) to find the correct package. Then IMMEDIATELY open it — never stop after just listing. "
                 f"If the user asks to close an application or undo a launch, reply with {close_example}. "
                 f"If the user refers to 'it' or 'that process', resolve 'it' to the active TARGET_PID or process name from Session State. "
                 f"NEVER output 'INTENT:' lines. Just talk like a normal person.\n"
-                f"Example response:\n"
-                f"Let me check what apps you have installed.\n"
-                f"EXECUTE: cmd package list packages -3\n\n"
+                f"Example response when user says 'open gemini':\n"
+                f"First message: 'Let me check what apps you have installed.' + EXECUTE: cmd package list packages\n"
+                f"Second message (after seeing output): 'Found it! Opening Gemini now.' + EXECUTE: am start -n <found_package>/<activity>\n"
+                f"You MUST send both messages in sequence. NEVER stop after listing packages.\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
             )
         elif self.chat_mode == "normal":
@@ -326,14 +327,15 @@ class ZourniaCLI:
                 f"If the user asks you to perform a task, you MUST first say a short natural sentence about what you are doing, then output the EXECUTE command on the next line. "
                 f"To open a NEW Chrome tab: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome "
                 f"To search Google: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome "
-                f"CRITICAL: When opening an app, NEVER guess the package name. ALWAYS run 'EXECUTE: cmd package list packages -3' first to find the correct package. If that fails, try 'EXECUTE: pm list packages'. "
+                f"CRITICAL: When opening an app, NEVER guess the package name. ALWAYS run 'EXECUTE: cmd package list packages' first (lists ALL apps including system apps) to find the correct package. Then IMMEDIATELY open it — never stop after just listing. "
                 f"If the user asks to close an application or undo a launch, reply with {close_example}. "
                 f"If the user refers to 'it' or 'that process', resolve 'it' to the active TARGET_PID or process name from Session State. "
                 f"For vague requests like 'open a random website' or 'find me something', search Google for it. "
                 f"NEVER output 'INTENT:' lines. Just talk like a normal person.\n"
-                f"Example response:\n"
-                f"Let me check what apps you have installed.\n"
-                f"EXECUTE: cmd package list packages -3\n\n"
+                f"Example response when user says 'open gemini':\n"
+                f"First message: 'Let me check what apps you have installed.' + EXECUTE: cmd package list packages\n"
+                f"Second message (after seeing output): 'Found it! Opening Gemini now.' + EXECUTE: am start -n <found_package>/<activity>\n"
+                f"You MUST send both messages in sequence. NEVER stop after listing packages.\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
             )
 
@@ -424,6 +426,7 @@ class ZourniaCLI:
 
                     if self.chat_mode != "normal":
                         lines = response.split("\n")
+                        ran_discovery = False
                         for line in lines:
                             line = line.strip().lstrip("`")
 
@@ -432,12 +435,32 @@ class ZourniaCLI:
                                 ack = self.execute_terminal_command(cmd_to_run)
                                 print(f"{C_GREEN}{ack}{C_RESET}\n")
                                 chat_history.append(("user", f"Execution confirmation received.\n\n{ack}"))
+                                if "cmd package list packages" in cmd_to_run or "pm list packages" in cmd_to_run:
+                                    ran_discovery = True
 
                             elif line.startswith("CLOSE:"):
                                 target_to_close = line.replace("CLOSE:", "").strip().rstrip("`")
                                 ack = self.terminate_process(target_to_close)
                                 print(f"{C_GREEN}{ack}{C_RESET}\n")
                                 chat_history.append(("user", f"Close confirmation received.\n\n{ack}"))
+
+                        if ran_discovery:
+                            print(f"{C_GREY}Thinking...{C_RESET}", end="\r")
+                            followup = self.get_ai_response("Now open the correct app based on the package list output above.", chat_history)
+                            print(" " * 20, end="\r")
+                            display_followup = "\n".join(
+                                l for l in followup.split("\n")
+                                if not l.strip().lstrip("`").startswith(("EXECUTE:", "CLOSE:"))
+                            ).strip()
+                            print(f"{C_GREEN}zournia > {C_WHITE}{display_followup}{C_RESET}\n")
+                            chat_history.append(("assistant", followup))
+                            for l in followup.split("\n"):
+                                l = l.strip().lstrip("`")
+                                if l.startswith("EXECUTE:"):
+                                    cmd_to_run = l.replace("EXECUTE:", "").strip().rstrip("`")
+                                    ack = self.execute_terminal_command(cmd_to_run)
+                                    print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                    chat_history.append(("user", f"Execution confirmation received.\n\n{ack}"))
 
                 else:
                     prompt = input(f"{C_GREEN}ZOURNIA // WORKSPACE_CORE > {C_RESET}").strip()
@@ -547,6 +570,7 @@ class ZourniaCLI:
 
                         if self.chat_mode != "normal":
                             lines = response.split("\n")
+                            ran_discovery = False
                             for line in lines:
                                 line = line.strip().lstrip("`")
 
@@ -555,12 +579,32 @@ class ZourniaCLI:
                                     ack = self.execute_terminal_command(cmd_to_run)
                                     print(f"{C_GREEN}{ack}{C_RESET}\n")
                                     chat_history.append(("user", f"Execution confirmation received.\n\n{ack}"))
+                                    if "cmd package list packages" in cmd_to_run or "pm list packages" in cmd_to_run:
+                                        ran_discovery = True
 
                                 elif line.startswith("CLOSE:"):
                                     target_to_close = line.replace("CLOSE:", "").strip().rstrip("`")
                                     ack = self.terminate_process(target_to_close)
                                     print(f"{C_GREEN}{ack}{C_RESET}\n")
                                     chat_history.append(("user", f"Close confirmation received.\n\n{ack}"))
+
+                            if ran_discovery:
+                                print(f"{C_GREY}Thinking...{C_RESET}", end="\r")
+                                followup = self.get_ai_response("Now open the correct app based on the package list output above.", chat_history)
+                                print(" " * 20, end="\r")
+                                display_followup = "\n".join(
+                                    l for l in followup.split("\n")
+                                    if not l.strip().lstrip("`").startswith(("EXECUTE:", "CLOSE:"))
+                                ).strip()
+                                print(f"{C_GREEN}zournia > {C_WHITE}{display_followup}{C_RESET}\n")
+                                chat_history.append(("assistant", followup))
+                                for l in followup.split("\n"):
+                                    l = l.strip().lstrip("`")
+                                    if l.startswith("EXECUTE:"):
+                                        cmd_to_run = l.replace("EXECUTE:", "").strip().rstrip("`")
+                                        ack = self.execute_terminal_command(cmd_to_run)
+                                        print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                        chat_history.append(("user", f"Execution confirmation received.\n\n{ack}"))
 
             except KeyboardInterrupt:
                 print(f"\n{C_YELLOW}Use /exit to quit.{C_RESET}\n")
