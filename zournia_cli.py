@@ -415,7 +415,7 @@ class ZourniaCLI:
 
                     display_response = "\n".join(
                         line for line in response.split("\n")
-                        if not line.strip().startswith(("EXECUTE:", "CLOSE:"))
+                        if not line.strip().lstrip("`").startswith(("EXECUTE:", "CLOSE:"))
                     ).strip()
                     print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
 
@@ -425,16 +425,16 @@ class ZourniaCLI:
                     if self.chat_mode != "normal":
                         lines = response.split("\n")
                         for line in lines:
-                            line = line.strip()
+                            line = line.strip().lstrip("`")
 
                             if line.startswith("EXECUTE:"):
-                                cmd_to_run = line.replace("EXECUTE:", "").strip()
+                                cmd_to_run = line.replace("EXECUTE:", "").strip().rstrip("`")
                                 ack = self.execute_terminal_command(cmd_to_run)
                                 print(f"{C_GREEN}{ack}{C_RESET}\n")
                                 chat_history.append(("user", f"Execution confirmation received.\n\n{ack}"))
 
                             elif line.startswith("CLOSE:"):
-                                target_to_close = line.replace("CLOSE:", "").strip()
+                                target_to_close = line.replace("CLOSE:", "").strip().rstrip("`")
                                 ack = self.terminate_process(target_to_close)
                                 print(f"{C_GREEN}{ack}{C_RESET}\n")
                                 chat_history.append(("user", f"Close confirmation received.\n\n{ack}"))
@@ -538,7 +538,7 @@ class ZourniaCLI:
 
                         display_response = "\n".join(
                             line for line in response.split("\n")
-                            if not line.strip().startswith(("EXECUTE:", "CLOSE:"))
+                            if not line.strip().lstrip("`").startswith(("EXECUTE:", "CLOSE:"))
                         ).strip()
                         print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
 
@@ -548,16 +548,16 @@ class ZourniaCLI:
                         if self.chat_mode != "normal":
                             lines = response.split("\n")
                             for line in lines:
-                                line = line.strip()
+                                line = line.strip().lstrip("`")
 
                                 if line.startswith("EXECUTE:"):
-                                    cmd_to_run = line.replace("EXECUTE:", "").strip()
+                                    cmd_to_run = line.replace("EXECUTE:", "").strip().rstrip("`")
                                     ack = self.execute_terminal_command(cmd_to_run)
                                     print(f"{C_GREEN}{ack}{C_RESET}\n")
                                     chat_history.append(("user", f"Execution confirmation received.\n\n{ack}"))
 
                                 elif line.startswith("CLOSE:"):
-                                    target_to_close = line.replace("CLOSE:", "").strip()
+                                    target_to_close = line.replace("CLOSE:", "").strip().rstrip("`")
                                     ack = self.terminate_process(target_to_close)
                                     print(f"{C_GREEN}{ack}{C_RESET}\n")
                                     chat_history.append(("user", f"Close confirmation received.\n\n{ack}"))
