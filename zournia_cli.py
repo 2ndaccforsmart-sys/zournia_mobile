@@ -178,17 +178,11 @@ class ZourniaCLI:
             "- To launch or run terminal commands, output its path or name directly (e.g. EXECUTE: python script.py or EXECUTE: ls -la). Run commands directly so the Termux system can execute them.\n\n"
             "Device Navigation Commands:\n"
             "- To open any Android app by package name: EXECUTE: am start -n <package>/<activity>\n"
-            "- Common apps: Chrome (com.android.chrome/com.google.android.apps.chrome.Main), Settings (com.android.settings/.Settings), Files (com.google.android.apps.nbu.files/.FileManagerActivity), Camera (android.media.action.IMAGE_CAPTURE), WhatsApp (com.whatsapp/.Main), YouTube (com.google.android.youtube/.HomeActivity)\n"
             "- To open a URL in a NEW Chrome tab: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome\n"
             "- To search Google in a NEW Chrome tab: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome\n"
             "- To list installed apps: EXECUTE: pm list packages\n"
             "- To open file manager: EXECUTE: am start -n com.google.android.apps.nbu.files/.FileManagerActivity\n\n"
-            "IMPORTANT BEHAVIOR:\n"
-            "- When the user asks to open something vague (e.g. 'open a random website', 'find me something', 'search for X'), FIRST state what you are going to do (e.g. 'Let me search that for you.'), THEN output the EXECUTE command.\n"
-            "- Always explain your action briefly BEFORE the EXECUTE line. Example:\n"
-            "INTENT: User wants to search for something\n"
-            "Let me search that for you on Google.\n"
-            "EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=random+interesting+websites\" com.android.chrome\n"
+            "CRITICAL: When the user asks to open an app, NEVER guess the package name. ALWAYS run 'EXECUTE: pm list packages' first to check what apps are actually installed, find the correct package name from the output, then open it.\n"
         )
 
     def execute_terminal_command(self, command: str) -> str:
@@ -305,13 +299,13 @@ class ZourniaCLI:
                 f"If the user asks you to perform a task (e.g. open a website, run a CLI command, open an app), you MUST first say a short natural sentence about what you are doing, then output the EXECUTE command on the next line. "
                 f"To open a NEW Chrome tab: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome "
                 f"To search Google: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome "
-                f"To open an app: EXECUTE: am start -n <package>/<activity> "
+                f"CRITICAL: When opening an app, NEVER guess the package name. ALWAYS run 'EXECUTE: pm list packages' first to find the correct package, then open it. "
                 f"If the user asks to close an application or undo a launch, reply with {close_example}. "
                 f"If the user refers to 'it' or 'that process', resolve 'it' to the active TARGET_PID or process name from Session State. "
                 f"NEVER output 'INTENT:' lines. Just talk like a normal person.\n"
                 f"Example response:\n"
-                f"Opening YouTube for you.\n"
-                f"EXECUTE: am start -n com.google.android.youtube/.HomeActivity\n\n"
+                f"Let me check what apps you have installed.\n"
+                f"EXECUTE: pm list packages\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
             )
         elif self.chat_mode == "normal":
@@ -332,14 +326,14 @@ class ZourniaCLI:
                 f"If the user asks you to perform a task, you MUST first say a short natural sentence about what you are doing, then output the EXECUTE command on the next line. "
                 f"To open a NEW Chrome tab: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome "
                 f"To search Google: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome "
-                f"To open an app: EXECUTE: am start -n <package>/<activity> "
+                f"CRITICAL: When opening an app, NEVER guess the package name. ALWAYS run 'EXECUTE: pm list packages' first to find the correct package, then open it. "
                 f"If the user asks to close an application or undo a launch, reply with {close_example}. "
                 f"If the user refers to 'it' or 'that process', resolve 'it' to the active TARGET_PID or process name from Session State. "
                 f"For vague requests like 'open a random website' or 'find me something', search Google for it. "
                 f"NEVER output 'INTENT:' lines. Just talk like a normal person.\n"
                 f"Example response:\n"
-                f"Let me find some random interesting websites for you.\n"
-                f"EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=random+interesting+websites\" com.android.chrome\n\n"
+                f"Let me check what apps you have installed.\n"
+                f"EXECUTE: pm list packages\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
             )
 
@@ -419,7 +413,11 @@ class ZourniaCLI:
                     response = self.get_ai_response(prompt, chat_history)
                     print(" " * 20, end="\r")
 
-                    print(f"{C_GREEN}zournia > {C_WHITE}{response}{C_RESET}\n")
+                    display_response = "\n".join(
+                        line for line in response.split("\n")
+                        if not line.strip().startswith(("EXECUTE:", "CLOSE:"))
+                    ).strip()
+                    print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
 
                     chat_history.append(("user", prompt))
                     chat_history.append(("assistant", response))
@@ -538,7 +536,11 @@ class ZourniaCLI:
                         response = self.get_ai_response(prompt, chat_history)
                         print(" " * 20, end="\r")
 
-                        print(f"{C_GREEN}zournia > {C_WHITE}{response}{C_RESET}\n")
+                        display_response = "\n".join(
+                            line for line in response.split("\n")
+                            if not line.strip().startswith(("EXECUTE:", "CLOSE:"))
+                        ).strip()
+                        print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
 
                         chat_history.append(("user", prompt))
                         chat_history.append(("assistant", response))
