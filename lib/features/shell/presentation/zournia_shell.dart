@@ -5,6 +5,7 @@ import 'package:window_manager/window_manager.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/zournia_theme.dart';
 import '../../../core/security/security_jail.dart';
 import '../../../core/security/permission_range.dart';
@@ -1453,60 +1454,107 @@ class _ZourniaShellState extends State<ZourniaShell> {
           if (!_securityJail.allowExecution(command)) {
             ackMsg = 'EXECUTION BLOCKED: Command execution is prohibited by Zournia Security Jail.';
           } else {
-            try {
-              final tokens = _parseCommandLine(command);
-              if (tokens.isNotEmpty) {
-                final exec = tokens.first;
-                final args = tokens.sublist(1);
-                final appName = exec.split(Platform.isWindows ? '\\' : '/').last.replaceAll('.exe', '').toLowerCase();
-                
-                // Try launching directly to capture PID
-                final process = await Process.start(exec, args);
-                _processRegistry[appName] = process.pid;
-                
-                // Update Session State with execution details
-                _sessionState.lastAction = 'EXECUTE: $command';
-                _sessionState.targetPid = process.pid;
-                await _saveSessionState();
-                
-                ackMsg = 'EXECUTION ACK: Command "$command" triggered successfully. Process: "$appName" (PID: ${process.pid}).';
+            final bool isMobile = !kIsWeb && !(Platform.isWindows || Platform.isMacOS || Platform.isLinux);
+            if (isMobile) {
+              final urlPattern = RegExp('https?://[^\\s]+');
+              final urlMatch = urlPattern.firstMatch(command);
+              if (urlMatch != null) {
+                try {
+                  final uri = Uri.parse(urlMatch.group(0)!);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    ackMsg = 'EXECUTION ACK: Opened ${uri.toString()} in browser.';
+                  } else {
+                    ackMsg = 'Error: Could not launch URL: ${uri.toString()}';
+                  }
+                } catch (e) {
+                  ackMsg = 'Error opening URL: $e';
+                }
               } else {
-                ackMsg = 'Error: Empty command.';
+                try {
+                  final process = await Process.start('sh', ['-c', command]);
+                  _sessionState.lastAction = 'EXECUTE: $command';
+                  _sessionState.targetPid = process.pid;
+                  await _saveSessionState();
+
+                  final List<int> stdoutBytes = [];
+                  final List<int> stderrBytes = [];
+                  final stdoutSub = process.stdout.listen((data) => stdoutBytes.addAll(data));
+                  final stderrSub = process.stderr.listen((data) => stderrBytes.addAll(data));
+
+                  await Future.delayed(const Duration(milliseconds: 500));
+
+                  await stdoutSub.cancel();
+                  await stderrSub.cancel();
+
+                  String output = '';
+                  final stdoutText = utf8.decode(stdoutBytes);
+                  final stderrText = utf8.decode(stderrBytes);
+                  if (stdoutText.trim().isNotEmpty) {
+                    output += '\n\nOutput:\n$stdoutText';
+                  }
+                  if (stderrText.trim().isNotEmpty) {
+                    output += '\n\nError:\n$stderrText';
+                  }
+
+                  ackMsg = 'EXECUTION ACK: Command "$command" triggered via sh successfully.$output';
+                } catch (ex) {
+                  ackMsg = 'Failed to execute command: $ex';
+                }
               }
-            } catch (e) {
-              // Fallback to cmd.exe shell if direct execution fails (e.g. for start cmd built-ins)
+            } else {
               try {
-                final shellExe = Platform.isWindows ? 'cmd.exe' : 'sh';
-                final shellArgs = Platform.isWindows ? ['/c', command] : ['-c', command];
-                final process = await Process.start(shellExe, shellArgs);
-                
-                _sessionState.lastAction = 'EXECUTE: $command';
-                _sessionState.targetPid = process.pid;
-                await _saveSessionState();
-                
-                final List<int> stdoutBytes = [];
-                final List<int> stderrBytes = [];
-                final stdoutSub = process.stdout.listen((data) => stdoutBytes.addAll(data));
-                final stderrSub = process.stderr.listen((data) => stderrBytes.addAll(data));
-                
-                await Future.delayed(const Duration(milliseconds: 500));
-                
-                await stdoutSub.cancel();
-                await stderrSub.cancel();
-                
-                String output = '';
-                final stdoutText = utf8.decode(stdoutBytes);
-                final stderrText = utf8.decode(stderrBytes);
-                if (stdoutText.trim().isNotEmpty) {
-                  output += '\n\nOutput:\n$stdoutText';
+                final tokens = _parseCommandLine(command);
+                if (tokens.isNotEmpty) {
+                  final exec = tokens.first;
+                  final args = tokens.sublist(1);
+                  final appName = exec.split(Platform.isWindows ? '\\' : '/').last.replaceAll('.exe', '').toLowerCase();
+                  
+                  final process = await Process.start(exec, args);
+                  _processRegistry[appName] = process.pid;
+                  
+                  _sessionState.lastAction = 'EXECUTE: $command';
+                  _sessionState.targetPid = process.pid;
+                  await _saveSessionState();
+                  
+                  ackMsg = 'EXECUTION ACK: Command "$command" triggered successfully. Process: "$appName" (PID: ${process.pid}).';
+                } else {
+                  ackMsg = 'Error: Empty command.';
                 }
-                if (stderrText.trim().isNotEmpty) {
-                  output += '\n\nError:\n$stderrText';
+              } catch (e) {
+                try {
+                  final shellExe = Platform.isWindows ? 'cmd.exe' : 'sh';
+                  final shellArgs = Platform.isWindows ? ['/c', command] : ['-c', command];
+                  final process = await Process.start(shellExe, shellArgs);
+                  
+                  _sessionState.lastAction = 'EXECUTE: $command';
+                  _sessionState.targetPid = process.pid;
+                  await _saveSessionState();
+                  
+                  final List<int> stdoutBytes = [];
+                  final List<int> stderrBytes = [];
+                  final stdoutSub = process.stdout.listen((data) => stdoutBytes.addAll(data));
+                  final stderrSub = process.stderr.listen((data) => stderrBytes.addAll(data));
+                  
+                  await Future.delayed(const Duration(milliseconds: 500));
+                  
+                  await stdoutSub.cancel();
+                  await stderrSub.cancel();
+                  
+                  String output = '';
+                  final stdoutText = utf8.decode(stdoutBytes);
+                  final stderrText = utf8.decode(stderrBytes);
+                  if (stdoutText.trim().isNotEmpty) {
+                    output += '\n\nOutput:\n$stdoutText';
+                  }
+                  if (stderrText.trim().isNotEmpty) {
+                    output += '\n\nError:\n$stderrText';
+                  }
+                  
+                  ackMsg = 'EXECUTION ACK: Command "$command" triggered via $shellExe successfully.$output';
+                } catch (ex) {
+                  ackMsg = 'Failed to execute command: $ex';
                 }
-                
-                ackMsg = 'EXECUTION ACK: Command "$command" triggered via $shellExe successfully.$output';
-              } catch (ex) {
-                ackMsg = 'Failed to execute command: $ex';
               }
             }
           }
@@ -1670,7 +1718,7 @@ class _ZourniaShellState extends State<ZourniaShell> {
     final bool isDesktop = !kIsWeb && (Platform.isWindows || Platform.isMacOS || Platform.isLinux);
     final String platformName = isDesktop ? "Windows PC" : "Android/Termux environment";
     final String shellName = isDesktop ? "Windows shell" : "Android shell";
-    final String ytExample = isDesktop ? "start https://youtube.com" : "termux-open https://youtube.com";
+    final String ytExample = isDesktop ? "start https://youtube.com" : "am start -a android.intent.action.VIEW -d \"https://youtube.com\"";
     final String notepadExample = isDesktop ? "notepad.exe" : "ls -la";
     final String closeExample = isDesktop 
         ? "'CLOSE: <application_name>' (e.g. 'CLOSE: notepad' or 'CLOSE: calc')" 
@@ -1770,7 +1818,9 @@ class _ZourniaShellState extends State<ZourniaShell> {
           "- To list directory contents, use: ls \"<path>\"\n"
           "- To launch or run terminal commands, output its path or name directly (e.g. EXECUTE: python script.py or EXECUTE: ls -la). Do not prepend Windows commands. Run commands directly so the system can execute them.\n\n"
           "Termux/Android Commands:\n"
-          "- To open a URL or website in the user's browser, use: EXECUTE: termux-open \"<url>\" or termux-open-url \"<url>\" (e.g. EXECUTE: termux-open \"https://google.com\").\n";
+          "- To open a URL or website in the user's browser, use: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" (e.g. EXECUTE: am start -a android.intent.action.VIEW -d \"https://google.com\").\n"
+          "- To open a URL specifically in Chrome, use: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome (e.g. EXECUTE: am start -a android.intent.action.VIEW -d \"https://google.com\" com.android.chrome).\n"
+          "- To search Google directly, use: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\"\n";
     }
 
     final userProfile = Platform.environment['USERPROFILE'] ?? 'C:\\Users\\Admin';
