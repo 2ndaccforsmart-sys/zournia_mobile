@@ -267,51 +267,123 @@ class ZourniaCLI:
         if launch_match:
             pkg = launch_match.group(1)
             popular_apps = {
-                "com.discord": "com.discord/.main.MainDefault",
-                "com.google.android.youtube": "com.google.android.youtube/.app.honeycomb.Shell$HomeActivity",
-                "com.android.chrome": "com.android.chrome/com.google.android.apps.chrome.Main",
-                "com.whatsapp": "com.whatsapp/.Main",
-                "com.spotify.music": "com.spotify.music/.MainActivity",
-                "com.android.settings": "com.android.settings/.Settings",
-                "com.instagram.android": "com.instagram.android/.activity.MainStartActivity",
-                "com.google.android.gm": "com.google.android.gm/.ConversationListActivity",
-                "com.google.android.apps.maps": "com.google.android.apps.maps/com.google.android.maps.MapsActivity",
-                "com.telegram.messenger": "org.telegram.messenger/org.telegram.ui.LaunchActivity",
-                "org.telegram.messenger": "org.telegram.messenger/org.telegram.ui.LaunchActivity",
+                "com.discord": {
+                    "launcher": "com.discord/.main.MainDefault",
+                    "url": "https://discord.com/app"
+                },
+                "com.google.android.youtube": {
+                    "launcher": "com.google.android.youtube/.app.honeycomb.Shell$HomeActivity",
+                    "url": "https://youtube.com"
+                },
+                "com.android.chrome": {
+                    "launcher": "com.android.chrome/com.google.android.apps.chrome.Main",
+                    "url": "https://google.com"
+                },
+                "com.whatsapp": {
+                    "launcher": "com.whatsapp/.Main",
+                    "url": "https://web.whatsapp.com"
+                },
+                "com.spotify.music": {
+                    "launcher": "com.spotify.music/.MainActivity",
+                    "url": "https://open.spotify.com"
+                },
+                "com.android.settings": {
+                    "launcher": "com.android.settings/.Settings",
+                    "url": "https://www.google.com/search?q=android+settings"
+                },
+                "com.instagram.android": {
+                    "launcher": "com.instagram.android/.activity.MainStartActivity",
+                    "url": "https://instagram.com"
+                },
+                "com.facebook.katana": {
+                    "launcher": "com.facebook.katana/.LoginActivity",
+                    "url": "https://facebook.com"
+                },
+                "com.google.android.gm": {
+                    "launcher": "com.google.android.gm/.ConversationListActivity",
+                    "url": "https://mail.google.com"
+                },
+                "com.google.android.apps.maps": {
+                    "launcher": "com.google.android.apps.maps/com.google.android.maps.MapsActivity",
+                    "url": "https://maps.google.com"
+                },
+                "com.telegram.messenger": {
+                    "launcher": "org.telegram.messenger/org.telegram.ui.LaunchActivity",
+                    "url": "https://web.telegram.org"
+                },
+                "org.telegram.messenger": {
+                    "launcher": "org.telegram.messenger/org.telegram.ui.LaunchActivity",
+                    "url": "https://web.telegram.org"
+                },
+                "com.openai.chatgpt": {
+                    "launcher": "com.openai.chatgpt/.MainActivity",
+                    "url": "https://chatgpt.com"
+                },
+                "com.github.android": {
+                    "launcher": "com.github.android/.MainActivity",
+                    "url": "https://github.com"
+                }
             }
-            if pkg in popular_apps:
-                command = f"am start -n {popular_apps[pkg]}"
-            else:
-                # Try to resolve activity using cmd package
-                try:
-                    res = subprocess.run(
-                        f"cmd package resolve-activity --brief {pkg}",
-                        shell=True, capture_output=True, text=True, timeout=3
+
+            # Check if package is installed on the phone
+            is_installed = False
+            try:
+                # 1. Try listing packages
+                res = subprocess.run(
+                    "pm list packages 2>&1 </dev/null",
+                    shell=True, capture_output=True, text=True, timeout=2
+                )
+                if res.returncode == 0:
+                    is_installed = f"package:{pkg}" in res.stdout
+                else:
+                    # 2. Try pm path fallback
+                    path_res = subprocess.run(
+                        f"pm path {pkg} 2>&1 </dev/null",
+                        shell=True, capture_output=True, text=True, timeout=2
                     )
-                    if res.returncode == 0:
-                        lines = res.stdout.strip().splitlines()
-                        if lines:
-                            component = None
-                            for line in lines:
-                                if "/" in line and not line.startswith("priority="):
-                                    component = line.strip()
-                                    break
-                                elif "/" in line:
-                                    tokens = line.split()
-                                    for token in tokens:
-                                        if "/" in token:
-                                            component = token.strip()
-                                            break
-                            if component:
-                                command = f"am start -n {component}"
+                    is_installed = path_res.returncode == 0 and "package:" in path_res.stdout
+            except Exception:
+                is_installed = True
+
+            if is_installed:
+                if pkg in popular_apps:
+                    command = f"am start -n {popular_apps[pkg]['launcher']}"
+                else:
+                    # Try to resolve activity using cmd package
+                    try:
+                        res = subprocess.run(
+                            f"cmd package resolve-activity --brief {pkg}",
+                            shell=True, capture_output=True, text=True, timeout=3
+                        )
+                        if res.returncode == 0:
+                            lines = res.stdout.strip().splitlines()
+                            if lines:
+                                component = None
+                                for line in lines:
+                                    if "/" in line and not line.startswith("priority="):
+                                        component = line.strip()
+                                        break
+                                    elif "/" in line:
+                                        tokens = line.split()
+                                        for token in tokens:
+                                            if "/" in token:
+                                                component = token.strip()
+                                                break
+                                if component:
+                                    command = f"am start -n {component}"
+                                else:
+                                    command = f"am start -n {pkg}/.MainActivity"
                             else:
                                 command = f"am start -n {pkg}/.MainActivity"
                         else:
                             command = f"am start -n {pkg}/.MainActivity"
-                    else:
+                    except Exception:
                         command = f"am start -n {pkg}/.MainActivity"
-                except Exception:
-                    command = f"am start -n {pkg}/.MainActivity"
+            else:
+                # App not installed: Redirect to browser
+                fallback_url = popular_apps[pkg]["url"] if pkg in popular_apps else f"https://www.google.com/search?q={pkg.split('.')[-1]}"
+                print(f"{C_YELLOW}App '{pkg}' not found on device. Launching fallback in browser...{C_RESET}")
+                return self.open_url(fallback_url)
 
         print(f"{C_YELLOW}Executing: {command}{C_RESET}")
         try:

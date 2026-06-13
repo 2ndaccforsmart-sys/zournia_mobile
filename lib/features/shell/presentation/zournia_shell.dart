@@ -1488,51 +1488,128 @@ class _ZourniaShellState extends State<ZourniaShell> {
                   if (launchMatch != null) {
                     final pkg = launchMatch.group(1)!;
                     final popularApps = {
-                      'com.discord': 'com.discord/.main.MainDefault',
-                      'com.google.android.youtube': 'com.google.android.youtube/.app.honeycomb.Shell\$HomeActivity',
-                      'com.android.chrome': 'com.android.chrome/com.google.android.apps.chrome.Main',
-                      'com.whatsapp': 'com.whatsapp/.Main',
-                      'com.spotify.music': 'com.spotify.music/.MainActivity',
-                      'com.android.settings': 'com.android.settings/.Settings',
-                      'com.instagram.android': 'com.instagram.android/.activity.MainStartActivity',
-                      'com.google.android.gm': 'com.google.android.gm/.ConversationListActivity',
-                      'com.google.android.apps.maps': 'com.google.android.apps.maps/com.google.android.maps.MapsActivity',
-                      'com.telegram.messenger': 'org.telegram.messenger/org.telegram.ui.LaunchActivity',
-                      'org.telegram.messenger': 'org.telegram.messenger/org.telegram.ui.LaunchActivity',
+                      'com.discord': {
+                        'launcher': 'com.discord/.main.MainDefault',
+                        'url': 'https://discord.com/app'
+                      },
+                      'com.google.android.youtube': {
+                        'launcher': 'com.google.android.youtube/.app.honeycomb.Shell\$HomeActivity',
+                        'url': 'https://youtube.com'
+                      },
+                      'com.android.chrome': {
+                        'launcher': 'com.android.chrome/com.google.android.apps.chrome.Main',
+                        'url': 'https://google.com'
+                      },
+                      'com.whatsapp': {
+                        'launcher': 'com.whatsapp/.Main',
+                        'url': 'https://web.whatsapp.com'
+                      },
+                      'com.spotify.music': {
+                        'launcher': 'com.spotify.music/.MainActivity',
+                        'url': 'https://open.spotify.com'
+                      },
+                      'com.android.settings': {
+                        'launcher': 'com.android.settings/.Settings',
+                        'url': 'https://www.google.com/search?q=android+settings'
+                      },
+                      'com.instagram.android': {
+                        'launcher': 'com.instagram.android/.activity.MainStartActivity',
+                        'url': 'https://instagram.com'
+                      },
+                      'com.facebook.katana': {
+                        'launcher': 'com.facebook.katana/.LoginActivity',
+                        'url': 'https://facebook.com'
+                      },
+                      'com.google.android.gm': {
+                        'launcher': 'com.google.android.gm/.ConversationListActivity',
+                        'url': 'https://mail.google.com'
+                      },
+                      'com.google.android.apps.maps': {
+                        'launcher': 'com.google.android.apps.maps/com.google.android.maps.MapsActivity',
+                        'url': 'https://maps.google.com'
+                      },
+                      'com.telegram.messenger': {
+                        'launcher': 'org.telegram.messenger/org.telegram.ui.LaunchActivity',
+                        'url': 'https://web.telegram.org'
+                      },
+                      'org.telegram.messenger': {
+                        'launcher': 'org.telegram.messenger/org.telegram.ui.LaunchActivity',
+                        'url': 'https://web.telegram.org'
+                      },
+                      'com.openai.chatgpt': {
+                        'launcher': 'com.openai.chatgpt/.MainActivity',
+                        'url': 'https://chatgpt.com'
+                      },
+                      'com.github.android': {
+                        'launcher': 'com.github.android/.MainActivity',
+                        'url': 'https://github.com'
+                      }
                     };
-                    if (popularApps.containsKey(pkg)) {
-                      finalCommand = 'am start -n ${popularApps[pkg]}';
-                    } else {
-                      try {
-                        final res = await Process.run('cmd', ['package', 'resolve-activity', '--brief', pkg]);
-                        if (res.exitCode == 0) {
-                          final lines = res.stdout.toString().trim().split('\n');
-                          String? component;
-                          for (final line in lines) {
-                            if (line.contains('/') && !line.startsWith('priority=')) {
-                              component = line.trim();
-                              break;
-                            } else if (line.contains('/')) {
-                              final tokens = line.split(RegExp(r'\s+'));
-                              for (final token in tokens) {
-                                if (token.contains('/')) {
-                                  component = token.trim();
-                                  break;
+
+                    bool isInstalled = false;
+                    try {
+                      final pmListRes = await Process.run('sh', ['-c', 'pm list packages 2>&1 </dev/null']);
+                      if (pmListRes.exitCode == 0) {
+                        isInstalled = pmListRes.stdout.toString().contains('package:$pkg');
+                      } else {
+                        final pmPathRes = await Process.run('sh', ['-c', 'pm path $pkg 2>&1 </dev/null']);
+                        isInstalled = pmPathRes.exitCode == 0 && pmPathRes.stdout.toString().contains('package:');
+                      }
+                    } catch (_) {
+                      isInstalled = true;
+                    }
+
+                    if (isInstalled) {
+                      if (popularApps.containsKey(pkg)) {
+                        finalCommand = 'am start -n ${popularApps[pkg]!['launcher']}';
+                      } else {
+                        try {
+                          final res = await Process.run('cmd', ['package', 'resolve-activity', '--brief', pkg]);
+                          if (res.exitCode == 0) {
+                            final lines = res.stdout.toString().trim().split('\n');
+                            String? component;
+                            for (final line in lines) {
+                              if (line.contains('/') && !line.startsWith('priority=')) {
+                                component = line.trim();
+                                break;
+                              } else if (line.contains('/')) {
+                                final tokens = line.split(RegExp(r'\s+'));
+                                for (final token in tokens) {
+                                  if (token.contains('/')) {
+                                    component = token.trim();
+                                    break;
+                                  }
                                 }
                               }
                             }
-                          }
-                          if (component != null) {
-                            finalCommand = 'am start -n $component';
+                            if (component != null) {
+                              finalCommand = 'am start -n $component';
+                            } else {
+                              finalCommand = 'am start -n $pkg/.MainActivity';
+                            }
                           } else {
                             finalCommand = 'am start -n $pkg/.MainActivity';
                           }
-                        } else {
+                        } catch (_) {
                           finalCommand = 'am start -n $pkg/.MainActivity';
                         }
-                      } catch (_) {
-                        finalCommand = 'am start -n $pkg/.MainActivity';
                       }
+                    } else {
+                      final fallbackUrl = popularApps.containsKey(pkg)
+                          ? popularApps[pkg]!['url']!
+                          : 'https://www.google.com/search?q=${pkg.split('.').last}';
+                      try {
+                        final uri = Uri.parse(fallbackUrl.replaceAll(' ', '%20'));
+                        if (await canLaunchUrl(uri)) {
+                          await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          ackMsg = 'EXECUTION ACK: App "$pkg" is not installed. Opened web version in browser.';
+                        } else {
+                          ackMsg = 'Error: App "$pkg" is not installed, and could not launch fallback URL.';
+                        }
+                      } catch (e) {
+                        ackMsg = 'Error opening fallback URL: $e';
+                      }
+                      return;
                     }
                   }
                   final process = await Process.start('sh', ['-c', finalCommand]);
