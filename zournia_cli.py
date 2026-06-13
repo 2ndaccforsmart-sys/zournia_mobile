@@ -274,12 +274,18 @@ class ZourniaCLI:
                 stdout, stderr = process.communicate()
                 out_text = stdout.decode('utf-8', errors='replace')
                 err_text = stderr.decode('utf-8', errors='replace')
+
+                # Filter out Android launcher / intent noise
+                out_lines = [l for l in out_text.splitlines() if "Starting: Intent {" not in l]
+                err_lines = [l for l in err_text.splitlines() if "Warning: Activity not started" not in l]
+                out_clean = "\n".join(out_lines).strip()
+                err_clean = "\n".join(err_lines).strip()
                 
                 output = ""
-                if out_text.strip():
-                    output += f"\n\nOutput:\n{out_text}"
-                if err_text.strip():
-                    output += f"\n\nError:\n{err_text}"
+                if out_clean:
+                    output += f"\n\nOutput:\n{out_clean}"
+                if err_clean:
+                    output += f"\n\nError:\n{err_clean}"
                 
                 return f"EXECUTION ACK: Command \"{command}\" executed successfully with status {status}.{output}"
         except Exception as e:

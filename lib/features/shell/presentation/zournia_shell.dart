@@ -1487,13 +1487,19 @@ class _ZourniaShellState extends State<ZourniaShell> {
                   await stdoutSub.cancel();
                   await stderrSub.cancel();
 
+                  final outLines = const LineSplitter().convert(utf8.decode(stdoutBytes))
+                      .where((line) => !line.contains('Starting: Intent {')).toList();
+                  final errLines = const LineSplitter().convert(utf8.decode(stderrBytes))
+                      .where((line) => !line.contains('Warning: Activity not started')).toList();
+                  
+                  final stdoutText = outLines.join('\n').trim();
+                  final stderrText = errLines.join('\n').trim();
+
                   String output = '';
-                  final stdoutText = utf8.decode(stdoutBytes);
-                  final stderrText = utf8.decode(stderrBytes);
-                  if (stdoutText.trim().isNotEmpty) {
+                  if (stdoutText.isNotEmpty) {
                     output += '\n\nOutput:\n$stdoutText';
                   }
-                  if (stderrText.trim().isNotEmpty) {
+                  if (stderrText.isNotEmpty) {
                     output += '\n\nError:\n$stderrText';
                   }
 
@@ -1541,13 +1547,19 @@ class _ZourniaShellState extends State<ZourniaShell> {
                   await stdoutSub.cancel();
                   await stderrSub.cancel();
                   
+                  final outLines = const LineSplitter().convert(utf8.decode(stdoutBytes))
+                      .where((line) => !line.contains('Starting: Intent {')).toList();
+                  final errLines = const LineSplitter().convert(utf8.decode(stderrBytes))
+                      .where((line) => !line.contains('Warning: Activity not started')).toList();
+                  
+                  final stdoutText = outLines.join('\n').trim();
+                  final stderrText = errLines.join('\n').trim();
+
                   String output = '';
-                  final stdoutText = utf8.decode(stdoutBytes);
-                  final stderrText = utf8.decode(stderrBytes);
-                  if (stdoutText.trim().isNotEmpty) {
+                  if (stdoutText.isNotEmpty) {
                     output += '\n\nOutput:\n$stdoutText';
                   }
-                  if (stderrText.trim().isNotEmpty) {
+                  if (stderrText.isNotEmpty) {
                     output += '\n\nError:\n$stderrText';
                   }
                   
