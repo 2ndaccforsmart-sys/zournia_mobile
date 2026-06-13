@@ -1,22 +1,31 @@
 # Zournia Mobile — Termux & APK Port
 
-A mobile-friendly adaptation of Zournia OS, optimized for deployment on mobile phones either as a native Android APK or as an interactive CLI application inside Termux.
+A mobile-friendly adaptation of Zournia OS, optimized for deployment on Android phones either as a native APK or as an interactive CLI application inside Termux.
 
 ## Features
 
 - **Termux CLI Option (`zournia_cli.py`)**:
   - Direct execution of system automation commands inside the Termux shell.
-  - Portable, zero-dependency Python script using standard libraries (no `pip install` required).
+  - Zero-dependency Python script using standard libraries (no external package installations needed).
   - Diagnostic Telemetry Panel (`/telemetry` command) tracking session state and processes.
   - Interactive slash commands for model selection (`/model`) and chat mode toggling (`/mode`).
 - **Android APK Option**:
   - Full Flutter UI styled with the Zournia premium dark design system.
-  - Dynamic window and title bar controls hidden on mobile to avoid crashes.
+  - Dynamic window and title bar controls hidden on mobile to avoid layout issues.
   - Dynamic AI response system prompt adjusting to the Android context (using Linux shell tools instead of Windows utilities).
   - Secure local storage for API keys (`api_keys.json`) and custom models.
+- **Unrestricted Control**:
+  - Removed local security jail constraints in both Python and Flutter paths to allow unrestricted system execution.
+- **Intelligent Package Checker & Browser Fallback**:
+  - Automatically queries the device package manager (`pm list packages`/`pm path` with redirection to bypass SELinux restrictions) to verify if an app is installed.
+  - Launches popular apps directly using targeted launch activities (ChatGPT, Discord, YouTube, Telegram, WhatsApp, Spotify, Settings, etc.).
+  - Gracefully falls back to browser URL launch or Google Search in Chrome when the app is not installed on the device.
+- **Improved URL & Search Handling**:
+  - Handles space-containing search strings by encoding space characters as `%20` and using quote-aware regex.
+- **Silent Launch Telemetry**:
+  - Suppresses activity intent outputs and warnings to keep the conversation logs clean.
 - **Git & CI/CD Ready**:
-  - Pre-configured `.gitignore` excluding runtime session logs, caches, and secret keys.
-  - GitHub Actions Workflow (`.github/workflows/build_apk.yml`) to automatically compile the APK on every push to your repository.
+  - Updated GitHub Actions workflow (`.github/workflows/build_apk.yml`) leveraging the latest stable Flutter SDK.
 
 ---
 
@@ -33,8 +42,8 @@ pkg update && pkg upgrade
 # Install Python and Git
 pkg install python git
 
-# Clone your published repository
-git clone <YOUR_PUBLISHED_GITHUB_REPO_URL>
+# Clone the repository
+git clone https://github.com/2ndaccforsmart-sys/zournia_mobile.git
 cd zournia_mobile
 ```
 
@@ -58,13 +67,7 @@ python zournia_cli.py
 
 You can compile the application to a native `.apk` file:
 
-### Method A: Automated GitHub Actions (Recommended)
-1. Push this folder to your GitHub repository.
-2. Navigate to the **Actions** tab on your GitHub repository page.
-3. Select the **Build Zournia Mobile APK** workflow.
-4. Download the compiled `zournia-mobile-apk` artifact from the run details, transfer it to your phone, and install!
-
-### Method B: Local Compilation
+### Method A: Local Compilation (Recommended for instant access)
 If you have the Flutter SDK and Android SDK installed on your machine:
 ```bash
 # Get Flutter dependencies
@@ -73,7 +76,15 @@ flutter pub get
 # Compile release APK
 flutter build apk --release
 ```
-The resulting APK will be saved at `build/app/outputs/flutter-apk/app-release.apk`.
+The resulting APK will be saved at:
+`build/app/outputs/flutter-apk/app-release.apk`
+You can transfer this file directly to your phone and install it.
+
+### Method B: Automated GitHub Actions
+1. Push this folder to your GitHub repository.
+2. Navigate to the **Actions** tab on your GitHub repository page.
+3. Select the **Build Zournia Mobile APK** workflow.
+4. Download the compiled `zournia-mobile-apk` artifact from the run details, transfer it to your phone, and install.
 
 ---
 
