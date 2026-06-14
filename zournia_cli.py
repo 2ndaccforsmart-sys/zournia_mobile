@@ -111,7 +111,12 @@ class ZourniaCLI:
             pass
 
     def get_api_key(self):
-        return self.api_keys.get("OpenRouter", "")
+        if self.api_keys.get("OpenRouter"):
+            return self.api_keys["OpenRouter"]
+        for val in self.api_keys.values():
+            if val:
+                return val
+        return ""
 
     def validate_command(self, command: str) -> bool:
         return True
