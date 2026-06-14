@@ -60,7 +60,6 @@ class _ZourniaShellState extends State<ZourniaShell> {
   final List<Map<String, String>> _messages = [];
   final ScrollController _scrollController = ScrollController();
   String _chatMode = 'default';
-  String _userApiKey = '';
   late final SecurityJail _securityJail;
   final Map<String, int> _processRegistry = {};
   SessionState _sessionState = SessionState();
@@ -181,10 +180,7 @@ class _ZourniaShellState extends State<ZourniaShell> {
             decoded.forEach((key, value) {
               _apiKeys[key] = value.toString();
             });
-            // Keep OpenRouter synced with _userApiKey
-            if (_apiKeys.containsKey('OpenRouter')) {
-              _userApiKey = _apiKeys['OpenRouter']!;
-            }
+            // Keep OpenRouter synced
           });
         }
       } else if (await legacyFile.exists()) {
@@ -193,7 +189,6 @@ class _ZourniaShellState extends State<ZourniaShell> {
         if (key.isNotEmpty) {
           setState(() {
             _apiKeys['OpenRouter'] = key;
-            _userApiKey = key;
           });
           await _saveApiKeys(); // save to json
         }
@@ -214,9 +209,8 @@ class _ZourniaShellState extends State<ZourniaShell> {
       final content = jsonEncode(_apiKeys);
       await jsonFile.writeAsString(content);
 
-      // Keep OpenRouter synced in _userApiKey and api_key.txt
+       // Keep OpenRouter synced in api_key.txt
       final openRouterKey = _apiKeys['OpenRouter'] ?? '';
-      _userApiKey = openRouterKey;
       final legacyFile = File('api_key.txt');
       await legacyFile.writeAsString(openRouterKey);
     } catch (e) {
@@ -1838,20 +1832,37 @@ class _ZourniaShellState extends State<ZourniaShell> {
   }
 
   Future<String> _getAiResponse(String prompt) async {
-    final apiKey = _getApiKey();
-    if (apiKey.isEmpty) {
-      return "Error: API key is not configured. Please plug your OpenRouter API key in the code.";
-    }
-
+    // Determine provider and model identifier
+    String provider = 'OpenRouter';
     String modelName = 'google/gemini-2.5-flash';
+
     if (_selectedModel == 'Qwen 3.6 Coder') {
       modelName = 'qwen/qwen-2.5-coder-32b-instruct';
     } else if (_selectedModel == 'Gemini') {
-      modelName = 'google/gemini-2.5-flash';
+      if (_apiKeys.containsKey('Google Gemini')) {
+        provider = 'Google Gemini';
+        modelName = 'gemini-2.5-flash';
+      } else if (_apiKeys.containsKey('Gemini')) {
+        provider = 'Gemini';
+        modelName = 'gemini-2.5-flash';
+      } else {
+        modelName = 'google/gemini-2.5-flash';
+      }
     } else if (_selectedModel == 'Dolphin') {
       modelName = 'cognitivecomputations/dolphin-2.9.2-qwen2-72b';
     } else if (_selectedModel == 'Hermes') {
-      modelName = 'nousresearch/hermes-3-llama-3-8b';
+      if (_apiKeys.containsKey('Together AI')) {
+        provider = 'Together AI';
+        modelName = 'NousResearch/Hermes-3-Llama-3.1-8B';
+      } else if (_apiKeys.containsKey('Together')) {
+        provider = 'Together';
+        modelName = 'NousResearch/Hermes-3-Llama-3.1-8B';
+      } else if (_apiKeys.containsKey('DeepInfra')) {
+        provider = 'DeepInfra';
+        modelName = 'NousResearch/Hermes-3-Llama-3.1-8B';
+      } else {
+        modelName = 'nousresearch/hermes-3-llama-3-8b';
+      }
     } else if (_selectedModel == 'Auto') {
       modelName = 'google/gemini-2.5-flash';
     } else {
@@ -1861,7 +1872,43 @@ class _ZourniaShellState extends State<ZourniaShell> {
       );
       if (customModel.isNotEmpty && customModel['identifier'] != null) {
         modelName = customModel['identifier'] as String;
+        provider = customModel['provider'] as String? ?? 'OpenRouter';
       }
+    }
+
+    String provKey = provider;
+    Uri url = Uri.parse('https://openrouter.ai/api/v1/chat/completions');
+    final provLower = provider.toLowerCase().trim();
+
+    if (provLower.contains('together')) {
+      provKey = _apiKeys.containsKey('Together AI') ? 'Together AI' : (_apiKeys.containsKey('Together') ? 'Together' : 'Together AI');
+      url = Uri.parse('https://api.together.xyz/v1/chat/completions');
+    } else if (provLower.contains('deepinfra')) {
+      provKey = 'DeepInfra';
+      url = Uri.parse('https://api.deepinfra.com/v1/chat/completions');
+    } else if (provLower.contains('gemini') || provLower.contains('google')) {
+      provKey = _apiKeys.containsKey('Google Gemini') ? 'Google Gemini' : (_apiKeys.containsKey('Gemini') ? 'Gemini' : 'Google Gemini');
+      url = Uri.parse('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions');
+    } else if (provLower.contains('openai')) {
+      provKey = 'OpenAI';
+      url = Uri.parse('https://api.openai.com/v1/chat/completions');
+    }
+
+    String apiKey = _apiKeys[provKey] ?? '';
+    if (apiKey.isEmpty) {
+      // Fallback to OpenRouter key
+      apiKey = _apiKeys['OpenRouter'] ?? '';
+      url = Uri.parse('https://openrouter.ai/api/v1/chat/completions');
+      // Reset model name to OpenRouter default if we fallback
+      if (_selectedModel == 'Hermes') {
+        modelName = 'nousresearch/hermes-3-llama-3-8b';
+      } else if (_selectedModel == 'Gemini') {
+        modelName = 'google/gemini-2.5-flash';
+      }
+    }
+
+    if (apiKey.isEmpty) {
+      return "Error: API key for $provKey (or OpenRouter fallback) is not configured in Settings.";
     }
 
     final sessionStateStr = "Active Session State:\n"
@@ -1917,8 +1964,6 @@ class _ZourniaShellState extends State<ZourniaShell> {
           "NEVER output EXECUTE, CLOSE, or INTENT lines.\n\n$sessionStateStr\n\n$systemInfoStr";
     }
 
-    final url = Uri.parse('https://openrouter.ai/api/v1/chat/completions');
-    
     try {
       final messagesPayload = <Map<String, String>>[];
       messagesPayload.add({'role': 'system', 'content': systemPrompt});
@@ -2048,9 +2093,6 @@ class _ZourniaShellState extends State<ZourniaShell> {
     return args;
   }
 
-  String _getApiKey() {
-    return _userApiKey;
-  }
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {

@@ -471,11 +471,70 @@ class ZourniaCLI:
         return ack_msg
 
     def get_ai_response(self, prompt: str, chat_history: list) -> str:
-        api_key = self.get_api_key()
-        if not api_key:
-            return "Error: API key is not configured. Use /help to see how to set it."
-
+        # Determine provider and model identifier
+        provider = "OpenRouter"
         model_name = self.get_model_identifier()
+        
+        # Check if custom model specifies provider
+        if self.selected_model not in DEFAULT_MODELS:
+            for m in self.custom_models:
+                if m.get("name") == self.selected_model:
+                    provider = m.get("provider", "OpenRouter")
+                    break
+        else:
+            # For default models
+            if self.selected_model == "Hermes":
+                if self.api_keys.get("Together AI"):
+                    provider = "Together AI"
+                    model_name = "NousResearch/Hermes-3-Llama-3.1-8B"
+                elif self.api_keys.get("Together"):
+                    provider = "Together"
+                    model_name = "NousResearch/Hermes-3-Llama-3.1-8B"
+                elif self.api_keys.get("DeepInfra"):
+                    provider = "DeepInfra"
+                    model_name = "NousResearch/Hermes-3-Llama-3.1-8B"
+            elif self.selected_model == "Dolphin":
+                if self.api_keys.get("Together AI"):
+                    provider = "Together AI"
+                    model_name = "cognitivecomputations/dolphin-2.9.2-qwen2-72b"
+                elif self.api_keys.get("Together"):
+                    provider = "Together"
+                    model_name = "cognitivecomputations/dolphin-2.9.2-qwen2-72b"
+            elif self.selected_model == "Gemini":
+                if self.api_keys.get("Google Gemini"):
+                    provider = "Google Gemini"
+                    model_name = "gemini-2.5-flash"
+                elif self.api_keys.get("Gemini"):
+                    provider = "Gemini"
+                    model_name = "gemini-2.5-flash"
+
+        # Resolve actual provider name and endpoint
+        prov_key = provider
+        url = "https://openrouter.ai/api/v1/chat/completions"
+        
+        prov_lower = provider.lower().strip()
+        if "together" in prov_lower:
+            prov_key = "Together AI" if "Together AI" in self.api_keys else ("Together" if "Together" in self.api_keys else "Together AI")
+            url = "https://api.together.xyz/v1/chat/completions"
+        elif "deepinfra" in prov_lower:
+            prov_key = "DeepInfra"
+            url = "https://api.deepinfra.com/v1/chat/completions"
+        elif "gemini" in prov_lower or "google" in prov_lower:
+            prov_key = "Google Gemini" if "Google Gemini" in self.api_keys else ("Gemini" if "Gemini" in self.api_keys else "Google Gemini")
+            url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+        elif "openai" in prov_lower:
+            prov_key = "OpenAI"
+            url = "https://api.openai.com/v1/chat/completions"
+
+        api_key = self.api_keys.get(prov_key, "")
+        # Fallback to OpenRouter key if specific key is empty
+        if not api_key:
+            api_key = self.api_keys.get("OpenRouter", "")
+            url = "https://openrouter.ai/api/v1/chat/completions"
+            model_name = self.get_model_identifier() # Reset to OpenRouter identifier
+
+        if not api_key:
+            return f"Error: API key for {prov_key} (or OpenRouter fallback) is not configured. Use /model key to set it."
         
         session_state_str = (
             f"Active Session State:\n"
@@ -539,7 +598,6 @@ class ZourniaCLI:
         messages_payload.append({"role": "user", "content": prompt})
 
         # POST request using urllib.request
-        url = "https://openrouter.ai/api/v1/chat/completions"
         headers = {
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
