@@ -21,13 +21,13 @@ C_CYAN = "\033[96m"
 C_RESET = "\033[0m"
 
 BANNER = f"""{C_GREEN}
-███████╗ ██████╗ ██╗   ██╗██████╗ ███╗   ██╗██╗ █████╗ 
-╚══███╔╝██╔═══██╗██║   ██║██╔══██╗████╗  ██║██║██╔══██╗
-  ███╔╝ ██║   ██║██║   ██║██████╔╝██╔██╗ ██║██║███████║
- ███╔╝  ██║   ██║██║   ██║██╔══██╗██║╚██╗██║██║██╔══██║
-███████╗╚██████╔╝╚██████╔╝██║  ██║██║ ╚████║██║██║  ██║
-╚══════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝╚═╝  ╚═╝
-                      {C_GREY}// TERMUX_CORE{C_RESET}
+   ███████  ██████  ██    ██ ██████  ███    ██ ██  █████
+   ╚══███╔╝██╔═══██╗██║   ██║██╔══██╗████╗  ██║██ ██╔══██╗
+     ███╔╝ ██║   ██║██║   ██║██████╔╝██╔██╗ ██║██║███████║
+    ███╔╝  ██║   ██║██║   ██║██╔══██╗██║╚██╗██║██║██╔══██║
+   ███████╗╚██████╔╝╚██████╔╝██║  ██║██║ ╚████║██║██║  ██║
+   ╚══════╝ ╚═════╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝╚═╝╚═╝  ╚═╝
+                     {C_GREY}// TERMUX_CORE{C_RESET}
 """
 
 DEFAULT_MODELS = {
@@ -85,7 +85,12 @@ class ZourniaCLI:
         if os.path.exists(session_state_path):
             try:
                 with open(session_state_path, "r") as f:
-                    self.session_state = json.load(f)
+                    saved = json.load(f)
+                    self.session_state = {k: v for k, v in saved.items() if k in ("lastAction", "targetPid", "intentTracking")}
+                    if "selected_model" in saved:
+                        self.selected_model = saved["selected_model"]
+                    if "chat_mode" in saved:
+                        self.chat_mode = saved["chat_mode"]
             except Exception as e:
                 pass
 
@@ -105,8 +110,11 @@ class ZourniaCLI:
 
         try:
             session_state_path = os.path.join(SCRIPT_DIR, "session_state.json")
+            save_data = dict(self.session_state)
+            save_data["selected_model"] = self.selected_model
+            save_data["chat_mode"] = self.chat_mode
             with open(session_state_path, "w") as f:
-                json.dump(self.session_state, f, indent=2)
+                json.dump(save_data, f, indent=2)
         except Exception as e:
             pass
 
@@ -499,7 +507,7 @@ class ZourniaCLI:
                 elif self.api_keys.get("DeepInfra"):
                     provider = "DeepInfra"
                     model_name = "NousResearch/Hermes-3-Llama-3.1-8B"
-                elif self.api_keys.get("Hugging Face"):
+                elif self.api_keys.get("Hugging Face") or self.api_keys.get("Hugging") or self.api_keys.get("HuggingFace"):
                     provider = "Hugging Face"
                     model_name = "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO"
                 elif self.api_keys.get("hf") or self.api_keys.get("huggingface"):
@@ -517,7 +525,7 @@ class ZourniaCLI:
                     model_name = "cognitivecomputations/dolphin-2.9.2-qwen2-72b"
                 elif self.api_keys.get("Hugging Face") or self.api_keys.get("Hugging") or self.api_keys.get("hf") or self.api_keys.get("huggingface") or self.api_keys.get("HuggingFace"):
                     provider = "Hugging Face"
-                    model_name = "cognitivecomputations/dolphin-2.9.2-qwen2-72b"
+                    model_name = "dphn/dolphin-2.9.2-qwen2-72b"
             elif self.selected_model == "Gemini":
                 if self.api_keys.get("Google Gemini"):
                     provider = "Google Gemini"
@@ -537,9 +545,9 @@ class ZourniaCLI:
         elif "deepinfra" in prov_lower:
             prov_key = "DeepInfra"
             url = "https://api.deepinfra.com/v1/chat/completions"
-        elif "huggingface" in prov_lower or "hugging face" in prov_lower or "hf" in prov_lower:
-            prov_key = "Hugging Face" if "Hugging Face" in self.api_keys else ("hf" if "hf" in self.api_keys else "Hugging Face")
-            url = "https://api-inference.huggingface.co/v1/chat/completions"
+        elif "huggingface" in prov_lower or "hugging face" in prov_lower or "hugging" in prov_lower or "hf" in prov_lower:
+            prov_key = next((k for k in ["Hugging Face", "Hugging", "HuggingFace", "hf", "huggingface"] if k in self.api_keys), "Hugging Face")
+            url = "https://router.huggingface.co/v1/chat/completions"
         elif "gemini" in prov_lower or "google" in prov_lower:
             prov_key = "Google Gemini" if "Google Gemini" in self.api_keys else ("Gemini" if "Gemini" in self.api_keys else "Google Gemini")
             url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"

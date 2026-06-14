@@ -1910,7 +1910,7 @@ class _ZourniaShellState extends State<ZourniaShell> {
       url = Uri.parse('https://api.deepinfra.com/v1/chat/completions');
     } else if (provLower.contains('huggingface') || provLower.contains('hugging face') || provLower.contains('hf')) {
       provKey = _apiKeys.containsKey('Hugging Face') ? 'Hugging Face' : (_apiKeys.containsKey('hf') ? 'hf' : 'Hugging Face');
-      url = Uri.parse('https://api-inference.huggingface.co/v1/chat/completions');
+      url = Uri.parse('https://router.huggingface.co/v1/chat/completions');
     } else if (provLower.contains('gemini') || provLower.contains('google')) {
       provKey = _apiKeys.containsKey('Google Gemini') ? 'Google Gemini' : (_apiKeys.containsKey('Gemini') ? 'Gemini' : 'Google Gemini');
       url = Uri.parse('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions');
