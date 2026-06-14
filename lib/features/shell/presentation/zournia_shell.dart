@@ -53,7 +53,7 @@ class ZourniaShell extends StatefulWidget {
 
 class _ZourniaShellState extends State<ZourniaShell> {
   AppView _currentView = AppView.workspace;
-  String _selectedModel = 'Gemini';
+  String _selectedModel = 'Dolphin';
   final TextEditingController _inputController = TextEditingController();
   final List<String> _workspaces = ['Workspace'];
   int _activeWorkspaceIndex = 0;

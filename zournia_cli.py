@@ -43,7 +43,7 @@ class ZourniaCLI:
         self.custom_models = []
         self.session_state = {"lastAction": "", "targetPid": None, "intentTracking": ""}
         self.chat_mode = "default"  # default or automation
-        self.selected_model = "Gemini"
+        self.selected_model = "Dolphin"
         self.process_registry = {}  # appName -> PID
         
         self.load_configs()
