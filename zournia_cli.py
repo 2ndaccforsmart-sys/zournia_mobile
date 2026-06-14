@@ -494,6 +494,12 @@ class ZourniaCLI:
                 elif self.api_keys.get("DeepInfra"):
                     provider = "DeepInfra"
                     model_name = "NousResearch/Hermes-3-Llama-3.1-8B"
+                elif self.api_keys.get("Hugging Face"):
+                    provider = "Hugging Face"
+                    model_name = "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO"
+                elif self.api_keys.get("hf") or self.api_keys.get("huggingface"):
+                    provider = "Hugging Face"
+                    model_name = "NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO"
             elif self.selected_model == "Dolphin":
                 if self.api_keys.get("Together AI"):
                     provider = "Together AI"
@@ -501,6 +507,9 @@ class ZourniaCLI:
                 elif self.api_keys.get("Together"):
                     provider = "Together"
                     model_name = "cognitivecomputations/dolphin-2.9.2-qwen2-72b"
+                elif self.api_keys.get("Hugging Face") or self.api_keys.get("hf") or self.api_keys.get("huggingface"):
+                    provider = "Hugging Face"
+                    model_name = "cognitivecomputations/dolphin-2.6-mixtral-8x7b"
             elif self.selected_model == "Gemini":
                 if self.api_keys.get("Google Gemini"):
                     provider = "Google Gemini"
@@ -520,6 +529,9 @@ class ZourniaCLI:
         elif "deepinfra" in prov_lower:
             prov_key = "DeepInfra"
             url = "https://api.deepinfra.com/v1/chat/completions"
+        elif "huggingface" in prov_lower or "hugging face" in prov_lower or "hf" in prov_lower:
+            prov_key = "Hugging Face" if "Hugging Face" in self.api_keys else ("hf" if "hf" in self.api_keys else "Hugging Face")
+            url = "https://api-inference.huggingface.co/v1/chat/completions"
         elif "gemini" in prov_lower or "google" in prov_lower:
             prov_key = "Google Gemini" if "Google Gemini" in self.api_keys else ("Gemini" if "Gemini" in self.api_keys else "Google Gemini")
             url = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"

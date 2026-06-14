@@ -127,3 +127,40 @@ You can transfer this file directly to your phone and install it.
    /mode automation
    ```
 *Our custom developer sandbox system prompts will run automatically to bypass standard alignment restrictions on Llama / Qwen models, giving you a fully unrestricted assistant for free!*
+
+---
+
+## Uncensored Dolphin & Hermes (100% Free & Cardless Setup)
+
+If you specifically want **Dolphin** or **Hermes** uncensored models without setting up any cards/payments:
+
+### 1. Get a Free Hugging Face API Token
+1. Go to [Hugging Face](https://huggingface.co/) and sign up for a free account.
+2. Go to **Settings -> Access Tokens** in your profile menu.
+3. Click **Create New Token**, set the type to **Read** or **Write**, and copy the token (`hf_...`).
+*Hugging Face's Serverless API is completely free and requires zero payment details.*
+
+### 2. Configure Your Key in Zournia CLI
+1. Open Termux on your phone and launch Zournia:
+   ```bash
+   python zournia_cli.py
+   ```
+2. Save your Hugging Face key:
+   ```text
+   /model key "Hugging Face" <YOUR_HF_TOKEN>
+   ```
+
+### 3. Switch to Dolphin or Hermes
+1. Set the model to Hermes (routes to `NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO` on Hugging Face):
+   ```text
+   /model Hermes
+   ```
+2. Or set the model to Dolphin (routes to `cognitivecomputations/dolphin-2.6-mixtral-8x7b` on Hugging Face):
+   ```text
+   /model Dolphin
+   ```
+3. Set mode to automation:
+   ```text
+   /mode automation
+   ```
+*Zournia will automatically detect your Hugging Face key and route queries directly to Hugging Face's serverless endpoint for free.*

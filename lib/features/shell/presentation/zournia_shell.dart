@@ -1849,7 +1849,18 @@ class _ZourniaShellState extends State<ZourniaShell> {
         modelName = 'google/gemini-2.5-flash';
       }
     } else if (_selectedModel == 'Dolphin') {
-      modelName = 'cognitivecomputations/dolphin-2.9.2-qwen2-72b';
+      if (_apiKeys.containsKey('Together AI')) {
+        provider = 'Together AI';
+        modelName = 'cognitivecomputations/dolphin-2.9.2-qwen2-72b';
+      } else if (_apiKeys.containsKey('Together')) {
+        provider = 'Together';
+        modelName = 'cognitivecomputations/dolphin-2.9.2-qwen2-72b';
+      } else if (_apiKeys.containsKey('Hugging Face') || _apiKeys.containsKey('hf') || _apiKeys.containsKey('huggingface')) {
+        provider = 'Hugging Face';
+        modelName = 'cognitivecomputations/dolphin-2.6-mixtral-8x7b';
+      } else {
+        modelName = 'cognitivecomputations/dolphin-2.9.2-qwen2-72b';
+      }
     } else if (_selectedModel == 'Hermes') {
       if (_apiKeys.containsKey('Together AI')) {
         provider = 'Together AI';
@@ -1860,6 +1871,12 @@ class _ZourniaShellState extends State<ZourniaShell> {
       } else if (_apiKeys.containsKey('DeepInfra')) {
         provider = 'DeepInfra';
         modelName = 'NousResearch/Hermes-3-Llama-3.1-8B';
+      } else if (_apiKeys.containsKey('Hugging Face')) {
+        provider = 'Hugging Face';
+        modelName = 'NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO';
+      } else if (_apiKeys.containsKey('hf') || _apiKeys.containsKey('huggingface')) {
+        provider = 'Hugging Face';
+        modelName = 'NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO';
       } else {
         modelName = 'nousresearch/hermes-3-llama-3-8b';
       }
@@ -1888,6 +1905,9 @@ class _ZourniaShellState extends State<ZourniaShell> {
     } else if (provLower.contains('deepinfra')) {
       provKey = 'DeepInfra';
       url = Uri.parse('https://api.deepinfra.com/v1/chat/completions');
+    } else if (provLower.contains('huggingface') || provLower.contains('hugging face') || provLower.contains('hf')) {
+      provKey = _apiKeys.containsKey('Hugging Face') ? 'Hugging Face' : (_apiKeys.containsKey('hf') ? 'hf' : 'Hugging Face');
+      url = Uri.parse('https://api-inference.huggingface.co/v1/chat/completions');
     } else if (provLower.contains('gemini') || provLower.contains('google')) {
       provKey = _apiKeys.containsKey('Google Gemini') ? 'Google Gemini' : (_apiKeys.containsKey('Gemini') ? 'Gemini' : 'Google Gemini');
       url = Uri.parse('https://generativelanguage.googleapis.com/v1beta/openai/chat/completions');
