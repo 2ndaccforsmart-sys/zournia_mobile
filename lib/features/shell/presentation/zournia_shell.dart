@@ -1878,7 +1878,7 @@ class _ZourniaShellState extends State<ZourniaShell> {
         provider = 'Hugging Face';
         modelName = 'NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO';
       } else {
-        modelName = 'nousresearch/hermes-3-llama-3-8b';
+        modelName = 'nousresearch/hermes-3-llama-3.1-8b';
       }
     } else if (_selectedModel == 'FreeModel') {
       modelName = 'openrouter/free';
@@ -1923,7 +1923,7 @@ class _ZourniaShellState extends State<ZourniaShell> {
       url = Uri.parse('https://openrouter.ai/api/v1/chat/completions');
       // Reset model name to OpenRouter default if we fallback
       if (_selectedModel == 'Hermes') {
-        modelName = 'nousresearch/hermes-3-llama-3-8b';
+        modelName = 'nousresearch/hermes-3-llama-3.1-8b';
       } else if (_selectedModel == 'Gemini') {
         modelName = 'google/gemini-2.5-flash';
       }

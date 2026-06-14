@@ -34,7 +34,7 @@ DEFAULT_MODELS = {
     "Gemini": "google/gemini-2.5-flash",
     "Qwen": "qwen/qwen-2.5-coder-32b-instruct",
     "Dolphin": "cognitivecomputations/dolphin-2.9.2-qwen2-72b",
-    "Hermes": "nousresearch/hermes-3-llama-3-8b",
+    "Hermes": "nousresearch/hermes-3-llama-3.1-8b",
     "FreeModel": "openrouter/free"
 }
 
