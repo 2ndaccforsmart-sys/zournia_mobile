@@ -807,16 +807,24 @@ class ZourniaCLI:
                                 else:
                                     print(f"{C_RED}Model '{name}' not found.{C_RESET}\n")
                             elif arg.startswith("key "):
-                                key_parts = arg[4:].strip().split(maxsplit=1)
-                                if len(key_parts) < 2:
-                                    print(f"{C_RED}Usage: /model key <provider> <key>{C_RESET}")
-                                    print(f"Example: /model key openrouter sk-or-v1-xxx\n")
+                                raw = arg[4:].strip()
+                                if raw.startswith('"'):
+                                    end = raw.find('"', 1)
+                                    if end == -1:
+                                        end = raw.find(' ', 1)
+                                    provider = raw[1:end].strip()
+                                    key = raw[end+1:].strip().strip('"').strip()
                                 else:
+                                    key_parts = raw.split(maxsplit=1)
+                                    if len(key_parts) < 2:
+                                        print(f"{C_RED}Usage: /model key <provider> <key>{C_RESET}")
+                                        print(f"Example: /model key openrouter sk-or-v1-xxx\n")
+                                        continue
                                     provider = key_parts[0].strip()
                                     key = key_parts[1].strip()
-                                    self.api_keys[provider] = key
-                                    self.save_configs()
-                                    print(f"{C_GREEN}API key for '{provider}' saved.{C_RESET}\n")
+                                self.api_keys[provider] = key
+                                self.save_configs()
+                                print(f"{C_GREEN}API key for '{provider}' saved.{C_RESET}\n")
                             elif arg == "key":
                                 print(f"\n{C_CYAN}API Key Status:{C_RESET}")
                                 for prov, key in self.api_keys.items():
