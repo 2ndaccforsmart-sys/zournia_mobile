@@ -34,7 +34,8 @@ DEFAULT_MODELS = {
     "Gemini": "google/gemini-2.5-flash",
     "Qwen": "qwen/qwen-2.5-coder-32b-instruct",
     "Dolphin": "cognitivecomputations/dolphin-2.9.2-qwen2-72b",
-    "Hermes": "nousresearch/hermes-3-llama-3-8b"
+    "Hermes": "nousresearch/hermes-3-llama-3-8b",
+    "FreeModel": "openrouter/free"
 }
 
 class ZourniaCLI:
@@ -43,7 +44,7 @@ class ZourniaCLI:
         self.custom_models = []
         self.session_state = {"lastAction": "", "targetPid": None, "intentTracking": ""}
         self.chat_mode = "default"  # default or automation
-        self.selected_model = "Dolphin"
+        self.selected_model = "FreeModel"
         self.process_registry = {}  # appName -> PID
         
         self.load_configs()

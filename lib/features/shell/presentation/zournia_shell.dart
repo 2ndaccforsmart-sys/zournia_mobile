@@ -53,7 +53,7 @@ class ZourniaShell extends StatefulWidget {
 
 class _ZourniaShellState extends State<ZourniaShell> {
   AppView _currentView = AppView.workspace;
-  String _selectedModel = 'Dolphin';
+  String _selectedModel = 'FreeModel';
   final TextEditingController _inputController = TextEditingController();
   final List<String> _workspaces = ['Workspace'];
   int _activeWorkspaceIndex = 0;
@@ -1863,6 +1863,8 @@ class _ZourniaShellState extends State<ZourniaShell> {
       } else {
         modelName = 'nousresearch/hermes-3-llama-3-8b';
       }
+    } else if (_selectedModel == 'FreeModel') {
+      modelName = 'openrouter/free';
     } else if (_selectedModel == 'Auto') {
       modelName = 'google/gemini-2.5-flash';
     } else {
@@ -2122,7 +2124,7 @@ class _ZourniaShellState extends State<ZourniaShell> {
   }
 
   List<String> get _allModelNames {
-    final list = <String>['Qwen 3.6 Coder', 'Gemini', 'Dolphin', 'Hermes', 'Auto'];
+    final list = <String>['Qwen 3.6 Coder', 'Gemini', 'Dolphin', 'Hermes', 'FreeModel', 'Auto'];
     for (final cm in _customModels) {
       final name = cm['name'] as String?;
       if (name != null && name.isNotEmpty) {

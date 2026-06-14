@@ -104,34 +104,26 @@ You can transfer this file directly to your phone and install it.
 
 ---
 
-## Uncensored & Unrestricted Models (100% Free Setup)
+## Uncensored & Unrestricted Models (100% Free & Cardless Setup)
 
-To use the **Nous Hermes 3** model (completely unrestricted) for free without depositing paid credits:
+*Note: Together AI now requires a bank card deposit to activate its API. If you want a **100% free setup with zero credit cards, bank cards, or deposits**, follow the OpenRouter Free model setup below:*
 
-### 1. Generate a Free Together AI API Key
-1. Go to [Together AI](https://www.together.ai/) and sign up for a developer account (no credit card required).
-2. You will get a free **$5 trial credit** immediately (which yields ~27 million tokens, enough for months of CLI usage).
-3. Copy your API Key from the dashboard.
+### 1. Generate a Free OpenRouter API Key (No Card / No Deposit)
+1. Go to [OpenRouter](https://openrouter.ai/) and sign up for an account (takes 5 seconds via Google, GitHub, or email).
+2. Go to **Keys** in the top navigation -> click **Create Key** -> copy your new API Key.
+*You do not need to add any payment methods or balance.*
 
 ### 2. Configure Your Key in Zournia CLI
-1. Run the CLI in Termux:
+1. Open Termux on your phone and run:
    ```bash
    python zournia_cli.py
    ```
-2. Save your Together AI key:
-   ```text
-   /model key "Together AI" <YOUR_TOGETHER_API_KEY>
-   ```
+2. When prompted, paste your OpenRouter key (or set it manually with `/model key openrouter <key>`).
 
-### 3. Switch to Hermes and Enable Automation
-1. Set active model to Hermes:
-   ```text
-   /model Hermes
-   ```
+### 3. Switch to FreeModel and Enable Automation
+1. The bot is configured to run **FreeModel** (`openrouter/free`) by default on startup. This automatically routes requests to available free-tier models (like Llama 3 8B, Qwen 2.5, or Mistral 7B) completely for free.
 2. Toggle automation mode:
    ```text
    /mode automation
    ```
-*Zournia will automatically route requests to Together AI's API endpoints using the key you saved.*
-
-*(Optional: When your $5 credit runs out, you can sign up for a new Together AI account with a different email/GitHub account to get a new free $5 key, as credit cards are not required).*
+*Our custom developer sandbox system prompts will run automatically to bypass standard alignment restrictions on Llama / Qwen models, giving you a fully unrestricted assistant for free!*
