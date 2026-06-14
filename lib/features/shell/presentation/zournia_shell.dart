@@ -1855,9 +1855,12 @@ class _ZourniaShellState extends State<ZourniaShell> {
       } else if (_apiKeys.containsKey('Together')) {
         provider = 'Together';
         modelName = 'cognitivecomputations/dolphin-2.9.2-qwen2-72b';
-      } else if (_apiKeys.containsKey('Hugging Face') || _apiKeys.containsKey('hf') || _apiKeys.containsKey('huggingface')) {
+      } else if (_apiKeys.containsKey('DeepInfra')) {
+        provider = 'DeepInfra';
+        modelName = 'cognitivecomputations/dolphin-2.9.2-qwen2-72b';
+      } else if (_apiKeys.containsKey('Hugging Face') || _apiKeys.containsKey('Hugging') || _apiKeys.containsKey('hf') || _apiKeys.containsKey('huggingface') || _apiKeys.containsKey('HuggingFace')) {
         provider = 'Hugging Face';
-        modelName = 'cognitivecomputations/dolphin-2.6-mixtral-8x7b';
+        modelName = 'dphn/dolphin-2.9.2-qwen2-72b';
       } else {
         modelName = 'cognitivecomputations/dolphin-2.9.2-qwen2-72b';
       }
@@ -1871,7 +1874,7 @@ class _ZourniaShellState extends State<ZourniaShell> {
       } else if (_apiKeys.containsKey('DeepInfra')) {
         provider = 'DeepInfra';
         modelName = 'NousResearch/Hermes-3-Llama-3.1-8B';
-      } else if (_apiKeys.containsKey('Hugging Face')) {
+      } else if (_apiKeys.containsKey('Hugging Face') || _apiKeys.containsKey('Hugging') || _apiKeys.containsKey('HuggingFace')) {
         provider = 'Hugging Face';
         modelName = 'NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO';
       } else if (_apiKeys.containsKey('hf') || _apiKeys.containsKey('huggingface')) {

@@ -512,9 +512,12 @@ class ZourniaCLI:
                 elif self.api_keys.get("Together"):
                     provider = "Together"
                     model_name = "cognitivecomputations/dolphin-2.9.2-qwen2-72b"
-                elif self.api_keys.get("Hugging Face") or self.api_keys.get("hf") or self.api_keys.get("huggingface"):
+                elif self.api_keys.get("DeepInfra"):
+                    provider = "DeepInfra"
+                    model_name = "cognitivecomputations/dolphin-2.9.2-qwen2-72b"
+                elif self.api_keys.get("Hugging Face") or self.api_keys.get("Hugging") or self.api_keys.get("hf") or self.api_keys.get("huggingface") or self.api_keys.get("HuggingFace"):
                     provider = "Hugging Face"
-                    model_name = "cognitivecomputations/dolphin-2.6-mixtral-8x7b"
+                    model_name = "cognitivecomputations/dolphin-2.9.2-qwen2-72b"
             elif self.selected_model == "Gemini":
                 if self.api_keys.get("Google Gemini"):
                     provider = "Google Gemini"
