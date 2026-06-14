@@ -101,3 +101,37 @@ You can transfer this file directly to your phone and install it.
     }
   ]
   ```
+
+---
+
+## Uncensored & Unrestricted Models (100% Free Setup)
+
+To use the **Nous Hermes 3** model (completely unrestricted) for free without depositing paid credits:
+
+### 1. Generate a Free Together AI API Key
+1. Go to [Together AI](https://www.together.ai/) and sign up for a developer account (no credit card required).
+2. You will get a free **$5 trial credit** immediately (which yields ~27 million tokens, enough for months of CLI usage).
+3. Copy your API Key from the dashboard.
+
+### 2. Configure Your Key in Zournia CLI
+1. Run the CLI in Termux:
+   ```bash
+   python zournia_cli.py
+   ```
+2. Save your Together AI key:
+   ```text
+   /model key "Together AI" <YOUR_TOGETHER_API_KEY>
+   ```
+
+### 3. Switch to Hermes and Enable Automation
+1. Set active model to Hermes:
+   ```text
+   /model Hermes
+   ```
+2. Toggle automation mode:
+   ```text
+   /mode automation
+   ```
+*Zournia will automatically route requests to Together AI's API endpoints using the key you saved.*
+
+*(Optional: When your $5 credit runs out, you can sign up for a new Together AI account with a different email/GitHub account to get a new free $5 key, as credit cards are not required).*
