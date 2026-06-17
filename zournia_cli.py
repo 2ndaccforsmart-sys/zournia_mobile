@@ -419,60 +419,148 @@ class ZourniaCLI:
             "- Workflow: DUMPUI: to see screen → TAP: x y to tap → SWIPE: to scroll\n"
         )
 
-    def open_url(self, url: str) -> str:
-        """Try every possible method to open a URL. Something WILL work."""
-        print(f"{C_YELLOW}Opening: {url}{C_RESET}")
+    def local_intent_parse(self, prompt: str) -> str:
+        """Handle common requests locally without AI. Returns ack string or None."""
+        import re as _re
+        p = prompt.lower().strip()
 
-        # Method 1: Python webbrowser (no external deps needed)
-        try:
-            if webbrowser.open(url):
-                return f"EXECUTION ACK: Opened {url} in browser."
-        except Exception:
-            pass
+        # Navigation
+        if _re.match(r'^(go\s+back|press\s+back|back\s+button)', p):
+            return self.phone_nav("back")
+        if _re.match(r'^(go\s+home|press\s+home|home\s+screen)', p):
+            return self.phone_nav("home")
+        if _re.match(r'^(open\s+recents|recent\s+apps|switch\s+apps)', p):
+            return self.phone_nav("recents")
 
-        # Method 2: Try each shell command
-        commands = [
-            f'termux-open "{url}"',
-            f'termux-open-url "{url}"',
-            f'xdg-open "{url}"',
-            f'am start --allow-background-activity-starts -a android.intent.action.VIEW -d "{url}" com.android.chrome',
-            f'am start -a android.intent.action.VIEW -d "{url}" com.android.chrome',
-            f'am start --allow-background-activity-starts -a android.intent.action.VIEW -d "{url}"',
-            f'am start -a android.intent.action.VIEW -d "{url}"',
-        ]
-        
-        errors = []
-        for cmd_str in commands:
-            try:
+        # Open app by name — map common names to package names
+        app_map = {
+            "youtube": "com.google.android.youtube",
+            "chrome": "com.android.chrome",
+            "browser": "com.android.chrome",
+            "whatsapp": "com.whatsapp",
+            "instagram": "com.instagram.android",
+            "facebook": "com.facebook.katana",
+            "twitter": "com.twitter.android",
+            "tiktok": "com.zhiliaoapp.musically",
+            "spotify": "com.spotify.music",
+            "netflix": "com.netflix.mediaclient",
+            "telegram": "org.telegram.messenger",
+            "discord": "com.discord",
+            "settings": "com.android.settings",
+            "maps": "com.google.android.apps.maps",
+            "gmail": "com.google.android.gm",
+            "github": "com.github.android",
+            "chatgpt": "com.openai.chatgpt",
+            "calculator": "com.google.android.calculator",
+            "camera": "com.android.camera",
+            "gallery": "com.google.android.apps.photos",
+            "files": "com.google.android.apps.nbu.files",
+            "phone": "com.google.android.dialer",
+            "messages": "com.google.android.apps.messaging",
+        }
+
+        # "open X"
+        m = _re.match(r'^(?:open|launch|start|run)\s+(.+)', p)
+        if m:
+            name = m.group(1).strip().rstrip(" app").strip()
+            if name in app_map:
+                pkg = app_map[name]
                 result = subprocess.run(
-                    ["sh", "-c", cmd_str],
+                    ["monkey", "-p", pkg, "1"],
                     capture_output=True, text=True, timeout=5
                 )
                 if result.returncode == 0:
-                    output_merged = (result.stdout + result.stderr).lower()
-                    if "blocked" in output_merged or "securityexception" in output_merged or "permission denied" in output_merged:
-                        errors.append(f"{cmd_str}: {output_merged.strip()}")
-                        continue
-                    if "activity not started" in output_merged and "brought to the front" not in output_merged:
-                        errors.append(f"{cmd_str}: {output_merged.strip()}")
-                        continue
-                    return f"EXECUTION ACK: Opened {url} via {cmd_str.split()[0]}."
-                else:
-                    errors.append(f"{cmd_str}: exit code {result.returncode}. {result.stderr.strip() or result.stdout.strip()}")
-            except (FileNotFoundError, subprocess.TimeoutExpired, Exception) as e:
-                errors.append(f"{cmd_str}: {str(e)}")
-                continue
+                    return f"Opened {name.title()}."
 
-        xiaomi_warning = (
-            f"\n{C_RED}Xiaomi/MIUI/HyperOS Alert:{C_RESET} If Chrome did not launch, Xiaomi devices block background launches by default.\n"
-            f"Please resolve this by:\n"
-            f"1. Go to {C_WHITE}Settings -> Apps -> Manage Apps -> Termux -> Other Permissions{C_RESET}\n"
-            f"2. Enable {C_GREEN}\"Display pop-up windows while running in the background\"{C_RESET}\n"
-            f"3. In the same menu, set Battery Saver to {C_GREEN}\"No restrictions\"{C_RESET}."
-        )
-        
-        err_details = "\n".join([f" - {err}" for err in errors])
-        return f"Failed to open {url}. Detailed logs:\n{err_details}\n{xiaomi_warning}"
+            # Not in map — try as package name directly
+            if "." in name:
+                result = subprocess.run(
+                    ["monkey", "-p", name, "1"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0:
+                    return f"Opened {name}."
+
+            # Try to open in browser as URL
+            if name.startswith("www.") or "." in name:
+                url = name if name.startswith("http") else f"https://{name}"
+                return self.open_url(url)
+
+        # "close X"
+        m = _re.match(r'^(?:close|kill|stop)\s+(.+)', p)
+        if m:
+            target = m.group(1).strip().rstrip(" app").strip()
+            return self.terminate_process(target)
+
+        # "search X on Y" or "play X on Y" or "look up X on Y"
+        m = _re.match(r'^(?:search|play|look\s+up|find|watch|listen\s+to)\s+(.+?)\s+on\s+(.+)', p)
+        if m:
+            query = m.group(1).strip()
+            platform = m.group(2).strip().rstrip(".")
+            return self.search_media(f"{platform} {query}")
+
+        # "search X" or "play X" — default to YouTube
+        m = _re.match(r'^(?:search|play|look\s+up|find|watch|listen\s+to)\s+(.+)', p)
+        if m:
+            query = m.group(1).strip()
+            return self.search_media(f"youtube {query}")
+
+        # "open youtube and search X" or "youtube search X"
+        m = _re.match(r'(?:open\s+)?youtube\s+(?:and\s+)?(?:search|look\s+up|find)\s+(.+)', p)
+        if m:
+            return self.search_media(f"youtube {m.group(1).strip()}")
+
+        # Direct URL
+        if _re.match(r'https?://', p):
+            return self.open_url(p)
+
+        # "tap on X" / "click X" — needs DUMPUI first, can't do locally
+        # "swipe up/down" etc — needs screen dimensions, can't do locally
+
+        return None  # Not handled locally
+
+    def open_url(self, url: str) -> str:
+        """Try every possible method to open a URL in the default browser."""
+        print(f"{C_YELLOW}Opening: {url}{C_RESET}")
+
+        # Method 1: am start without specifying package (uses default browser)
+        try:
+            r = subprocess.run(
+                ["am", "start", "-a", "android.intent.action.VIEW", "-d", url],
+                capture_output=True, text=True, timeout=5
+            )
+            if r.returncode == 0:
+                return f"EXECUTION ACK: Opened {url}."
+        except Exception:
+            pass
+
+        # Method 2: termux-open (uses Termux's default handler)
+        try:
+            r = subprocess.run(["termux-open", url], capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                return f"EXECUTION ACK: Opened {url}."
+        except Exception:
+            pass
+
+        # Method 3: Python webbrowser
+        try:
+            if webbrowser.open(url):
+                return f"EXECUTION ACK: Opened {url}."
+        except Exception:
+            pass
+
+        # Method 4: Try Chrome as last resort
+        try:
+            r = subprocess.run(
+                ["am", "start", "-a", "android.intent.action.VIEW", "-d", url, "com.android.chrome"],
+                capture_output=True, text=True, timeout=5
+            )
+            if r.returncode == 0:
+                return f"EXECUTION ACK: Opened {url} (via Chrome)."
+        except Exception:
+            pass
+
+        return f"Failed to open {url}"
 
     def execute_terminal_command(self, command: str) -> str:
         if not self.validate_command(command):
@@ -1035,16 +1123,10 @@ class ZourniaCLI:
                     if "Failed" not in result:
                         return f"EXECUTION ACK: Searched '{search_term}' on {platform.title()} and opened in app."
 
-                # Fallback: open the web search URL in Chrome
+                # Fallback: open the web search URL in default browser
                 web_url = info.get("web_url", "")
                 if web_url:
-                    chrome_cmd = f'am start -a android.intent.action.VIEW -d "{web_url}" com.android.chrome'
-                    try:
-                        r = subprocess.run(["sh", "-c", chrome_cmd], capture_output=True, text=True, timeout=5)
-                        if r.returncode == 0:
-                            return f"EXECUTION ACK: Searched '{search_term}' on {platform.title()} (via browser fallback)."
-                    except Exception:
-                        pass
+                    return self.open_url(web_url)
 
         # No app installed or deep link failed: open web URL
         web_url = info.get("web_url", f"https://www.google.com/search?q={encoded}")
@@ -1404,7 +1486,15 @@ class ZourniaCLI:
                     chat_history.append(("assistant", response))
 
                     if self.chat_mode != "normal":
-                        for kind, payload in self._extract_commands(response):
+                        commands_found = self._extract_commands(response)
+                        if not commands_found:
+                            local_ack = self.local_intent_parse(prompt)
+                            if local_ack:
+                                print(f"{C_GREEN}zournia > {C_WHITE}{local_ack}{C_RESET}\n")
+                                chat_history.append(("user", prompt))
+                                chat_history.append(("assistant", local_ack))
+                                continue
+                        for kind, payload in commands_found:
                             if kind == "EXECUTE":
                                 ack = self.execute_terminal_command(payload)
                                 print(f"{C_GREEN}{ack}{C_RESET}\n")
@@ -1627,7 +1717,7 @@ class ZourniaCLI:
                         ):
                             retries += 1
                             response = self.get_ai_response(prompt, chat_history)
-                        print(" " * 20, end="\r")
+                    print(" " * 20, end="\r")
 
                     display_response = self.clean_response(response)
                     print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
@@ -1636,7 +1726,15 @@ class ZourniaCLI:
                     chat_history.append(("assistant", response))
 
                     if self.chat_mode != "normal":
-                        for kind, payload in self._extract_commands(response):
+                        commands_found = self._extract_commands(response)
+                        if not commands_found:
+                            local_ack = self.local_intent_parse(prompt)
+                            if local_ack:
+                                print(f"{C_GREEN}zournia > {C_WHITE}{local_ack}{C_RESET}\n")
+                                chat_history.append(("user", prompt))
+                                chat_history.append(("assistant", local_ack))
+                                continue
+                        for kind, payload in commands_found:
                             if kind == "EXECUTE":
                                 ack = self.execute_terminal_command(payload)
                                 print(f"{C_GREEN}{ack}{C_RESET}\n")
