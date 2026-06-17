@@ -792,6 +792,7 @@ class ZourniaCLI:
             subprocess.run(["su", "-c", "mkdir -p /data/local/tmp/dalvik-cache"], capture_output=True, timeout=3)
         except Exception:
             pass
+        # Try uiautomator dump
         try:
             result = subprocess.run(["uiautomator", "dump", path], capture_output=True, text=True, timeout=10, env=env)
             if result.returncode == 0 and os.path.exists(path):
@@ -810,13 +811,14 @@ class ZourniaCLI:
                     pass
         except Exception:
             pass
+        # Fallback: try dumpsys input to get window/display info
         try:
-            result = subprocess.run(["dumpsys", "activity", "top"], capture_output=True, text=True, timeout=5)
+            result = subprocess.run(["dumpsys", "input"], capture_output=True, text=True, timeout=5)
             if result.returncode == 0 and result.stdout:
-                return self._parse_dumpsys_ui(result.stdout)
+                return self._parse_dumpsys_input(result.stdout)
         except Exception:
             pass
-        return "DUMPUI ERROR: uiautomator not available. Grant storage permission or root access."
+        return "DUMPUI ERROR: uiautomator needs storage permission. Run /permissions to grant it."
 
     def _parse_ui_xml(self, xml: str) -> str:
         import json as _json
@@ -837,35 +839,22 @@ class ZourniaCLI:
                 })
         return f"DUMPUI ACK: Found {len(bounds)} UI elements.\n{_json.dumps(bounds)}"
 
-    def _parse_dumpsys_ui(self, dumpsys: str) -> str:
+    def _parse_dumpsys_input(self, dumpsys: str) -> str:
+        """Parse dumpsys input for display info and touchable regions."""
         import json as _json
         import re as _re
-        bounds = []
-        view_regex = _re.compile(r'View\s+\[#(\d+)\]\s+(\S+).*?\[(\d+),(\d+)\]\[(\d+),(\d+)\]')
-        text_regex = _re.compile(r'mText=(\S+)')
-        for line in dumpsys.split("\n"):
-            vm = view_regex.search(line)
-            if vm:
-                entry = {
-                    "x1": int(vm.group(3)), "y1": int(vm.group(4)),
-                    "x2": int(vm.group(5)), "y2": int(vm.group(6)),
-                    "id": vm.group(2), "text": "",
-                }
-                tm = text_regex.search(line)
-                if tm:
-                    entry["text"] = tm.group(1)
-                bounds.append(entry)
-        if not bounds:
-            for line in dumpsys.split("\n"):
-                if "View" in line and "[" in line:
-                    coord_match = _re.compile(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]').search(line)
-                    if coord_match:
-                        bounds.append({
-                            "x1": int(coord_match.group(1)), "y1": int(coord_match.group(2)),
-                            "x2": int(coord_match.group(3)), "y2": int(coord_match.group(4)),
-                            "text": "",
-                        })
-        return f"DUMPUI ACK: Found {len(bounds)} UI elements (fallback).\n{_json.dumps(bounds)}"
+        elements = []
+        display_match = _re.search(r'DisplayWidth=(\d+).*?DisplayHeight=(\d+)', dumpsys)
+        if display_match:
+            w, h = int(display_match.group(1)), int(display_match.group(2))
+            elements.append({"type": "display", "width": w, "height": h})
+        region_matches = _re.findall(r'Window\{[^}]*\s+(\S+)\s+\[(\d+),(\d+)\]\[(\d+),(\d+)\]', dumpsys)
+        for name, x1, y1, x2, y2 in region_matches:
+            elements.append({
+                "x1": int(x1), "y1": int(y1), "x2": int(x2), "y2": int(y2),
+                "text": name,
+            })
+        return f"DUMPUI ACK: Found {len(elements)} display elements (dumpsys fallback).\n{_json.dumps(elements)}"
 
     def search_media(self, query: str) -> str:
         """Route a search query to the appropriate app or URL.
@@ -1135,21 +1124,24 @@ class ZourniaCLI:
 
         if self.chat_mode == "automation":
             system_prompt = (
-                f"You are Zournia, an Android phone assistant. You help users control their phone by outputting commands.\n"
-                f"OUTPUT FORMAT: Reply with a short acknowledgment (1-5 words), then on the NEXT LINE output exactly one command.\n"
-                f"Available commands:\n"
-                f"EXECUTE: <shell_command> — run a terminal command\n"
-                f"SEARCH: <platform> <query> — platforms: youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud\n"
-                f"CLOSE: <process_name> — close an app\n"
-                f"TAP: <x> <y> — tap screen coordinates\n"
-                f"SWIPE: <x1> <y1> <x2> <y2> — swipe gesture\n"
+                f"You are Zournia, an Android phone assistant.\n"
+                f"CRITICAL RULE: Words and text DO NOTHING. Only COMMANDS have effect. You MUST output commands to do anything.\n"
+                f"Saying 'Opening YouTube' does NOT open YouTube. You must output SEARCH: youtube or EXECUTE: am start ...\n"
+                f"OUTPUT: Short reply (1-5 words), then one command per line below it.\n"
+                f"MULTI-STEP: You can output multiple commands on separate lines. Each on its own line.\n"
+                f"Commands:\n"
+                f"EXECUTE: <command> — run terminal command\n"
+                f"SEARCH: <platform> <query> — youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud\n"
+                f"CLOSE: <name> — close an app\n"
+                f"TAP: <x> <y> — tap coordinates\n"
+                f"SWIPE: <x1> <y1> <x2> <y2> — swipe\n"
                 f"TYPE: <text> — type text\n"
-                f"NAV: <action> — actions: back, home, recents, enter, delete, tab, escape, power, volume_up, volume_down\n"
-                f"SCREENSHOT: — take a screenshot\n"
-                f"DUMPUI: — scan screen and list UI elements with coordinates\n"
-                f"Multi-step workflow: run DUMPUI first to see the screen, then use TAP/SWIPE coordinates from the result.\n"
-                f"When the user says 'play X', 'search X on YouTube', 'find X', 'watch X' — use SEARCH: command.\n"
-                f"Example: User says 'play despacito' → reply 'Playing that.' then next line: SEARCH: youtube despacito\n\n"
+                f"NAV: <action> — back, home, recents, enter, delete, tab, escape, power, volume_up, volume_down\n"
+                f"SCREENSHOT: — screenshot\n"
+                f"DUMPUI: — scan screen elements with coordinates\n"
+                f"Example: 'play despacito' → 'Sure.' then SEARCH: youtube despacito\n"
+                f"Example: 'open YouTube and search funny cats' → 'Opening.' then SEARCH: youtube funny cats\n"
+                f"If user asks to open an app, use SEARCH: or EXECUTE:. Never just say the words.\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
             )
         elif self.chat_mode == "normal":
@@ -1161,22 +1153,24 @@ class ZourniaCLI:
             )
         else:
             system_prompt = (
-                f"You are Zournia, an Android phone assistant. You help users control their phone by outputting commands.\n"
-                f"OUTPUT FORMAT: Reply with a short acknowledgment (1-5 words), then on the NEXT LINE output exactly one command.\n"
-                f"Available commands:\n"
-                f"EXECUTE: <shell_command> — run a terminal command\n"
-                f"SEARCH: <platform> <query> — platforms: youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud\n"
-                f"CLOSE: <process_name> — close an app\n"
-                f"TAP: <x> <y> — tap screen coordinates\n"
-                f"SWIPE: <x1> <y1> <x2> <y2> — swipe gesture\n"
+                f"You are Zournia, an Android phone assistant.\n"
+                f"CRITICAL RULE: Words and text DO NOTHING. Only COMMANDS have effect. You MUST output commands to do anything.\n"
+                f"Saying 'Opening YouTube' does NOT open YouTube. You must output SEARCH: youtube or EXECUTE: am start ...\n"
+                f"OUTPUT: Short reply (1-5 words), then one command per line below it.\n"
+                f"MULTI-STEP: You can output multiple commands on separate lines. Each on its own line.\n"
+                f"Commands:\n"
+                f"EXECUTE: <command> — run terminal command\n"
+                f"SEARCH: <platform> <query> — youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud\n"
+                f"CLOSE: <name> — close an app\n"
+                f"TAP: <x> <y> — tap coordinates\n"
+                f"SWIPE: <x1> <y1> <x2> <y2> — swipe\n"
                 f"TYPE: <text> — type text\n"
-                f"NAV: <action> — actions: back, home, recents, enter, delete, tab, escape, power, volume_up, volume_down\n"
-                f"SCREENSHOT: — take a screenshot\n"
-                f"DUMPUI: — scan screen and list UI elements with coordinates\n"
-                f"Multi-step workflow: run DUMPUI first to see the screen, then use TAP/SWIPE coordinates from the result.\n"
-                f"When the user says 'play X', 'search X on YouTube', 'find X', 'watch X' — use SEARCH: command.\n"
-                f"When the user says 'open X', 'launch X', 'close X' — use EXECUTE or CLOSE commands.\n"
-                f"Example: User says 'play despacito' → reply 'Playing that.' then next line: SEARCH: youtube despacito\n\n"
+                f"NAV: <action> — back, home, recents, enter, delete, tab, escape, power, volume_up, volume_down\n"
+                f"SCREENSHOT: — screenshot\n"
+                f"DUMPUI: — scan screen elements with coordinates\n"
+                f"Example: 'play despacito' → 'Sure.' then SEARCH: youtube despacito\n"
+                f"Example: 'open YouTube and search funny cats' → 'Opening.' then SEARCH: youtube funny cats\n"
+                f"If user asks to open an app, use SEARCH: or EXECUTE:. Never just say the words.\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
             )
 
