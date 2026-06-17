@@ -268,6 +268,8 @@ class ZourniaCLI:
         return "google/gemini-2.5-flash"
 
     def clean_response(self, response):
+        if not response:
+            return ""
         cleaned_lines = []
         for line in response.split("\n"):
             stripped = line.strip().strip("`").strip()
@@ -1118,7 +1120,10 @@ class ZourniaCLI:
                 response_data = json.loads(res.read().decode('utf-8'))
                 choices = response_data.get("choices", [])
                 if choices:
-                    return choices[0]["message"]["content"]
+                    content = choices[0]["message"]["content"]
+                    if content is None:
+                        return "Error: Model returned empty content."
+                    return content
                 return "Error: Empty response choices returned from model."
         except urllib.error.HTTPError as e:
             return f"Error: Server returned status code {e.code} - {e.read().decode('utf-8', errors='replace')}"
@@ -1155,18 +1160,15 @@ class ZourniaCLI:
         return False
 
     def check_all_files_access(self) -> bool:
-        """Check if Termux has MANAGE_EXTERNAL_STORAGE permission."""
+        """Check if Termux can actually write to external storage."""
+        test_path = "/sdcard/.zournia_perm_test"
         try:
-            result = subprocess.run(
-                ["sh", "-c", "appops get com.termux MANAGE_EXTERNAL_STORAGE 2>/dev/null"],
-                capture_output=True, text=True, timeout=3
-            )
-            output = result.stdout.strip()
-            if "allow" in output.lower():
-                return True
+            with open(test_path, "w") as f:
+                f.write("ok")
+            os.remove(test_path)
+            return True
         except Exception:
-            pass
-        return False
+            return False
 
     def run(self):
         print(BANNER)
