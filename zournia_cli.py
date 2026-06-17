@@ -1576,15 +1576,15 @@ class ZourniaCLI:
                             elif kind == "NAV":
                                 ack = self.phone_nav(payload)
                                 print(f"{C_GREEN}{ack}{C_RESET}\n")
-                                    chat_history.append(("user", f"Nav confirmation received.\n\n{ack}"))
-                                elif kind == "SCREENSHOT":
-                                    ack = self.phone_screenshot()
-                                    print(f"{C_GREEN}{ack}{C_RESET}\n")
-                                    chat_history.append(("user", f"Screenshot confirmation received.\n\n{ack}"))
-                                elif kind == "DUMPUI":
-                                    ack = self.phone_dump_ui()
-                                    print(f"{C_GREEN}{ack}{C_RESET}\n")
-                                    chat_history.append(("user", f"UI dump confirmation received.\n\n{ack}"))
+                                chat_history.append(("user", f"Nav confirmation received.\n\n{ack}"))
+                            elif kind == "SCREENSHOT":
+                                ack = self.phone_screenshot()
+                                print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                chat_history.append(("user", f"Screenshot confirmation received.\n\n{ack}"))
+                            elif kind == "DUMPUI":
+                                ack = self.phone_dump_ui()
+                                print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                chat_history.append(("user", f"UI dump confirmation received.\n\n{ack}"))
 
             except KeyboardInterrupt:
                 print(f"\n{C_YELLOW}Use /exit to quit.{C_RESET}\n")
