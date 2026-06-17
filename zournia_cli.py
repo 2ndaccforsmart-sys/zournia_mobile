@@ -440,6 +440,29 @@ class ZourniaCLI:
         if not self.validate_command(command):
             return "EXECUTION BLOCKED: Command execution is prohibited by Zournia Security Jail."
 
+        # Intercept nested commands: if the payload starts with SEARCH:, TAP:, etc.
+        # route to the correct handler instead of running as a shell command.
+        nested_cmd = command.strip().strip("`")
+        for prefix, kind in [("SEARCH:", "SEARCH"), ("TAP:", "TAP"), ("SWIPE:", "SWIPE"),
+                             ("TYPE:", "TYPE"), ("NAV:", "NAV"), ("SCREENSHOT:", "SCREENSHOT"),
+                             ("DUMPUI:", "DUMPUI")]:
+            if nested_cmd.startswith(prefix):
+                payload = nested_cmd[len(prefix):].strip().strip("`").strip()
+                if kind == "SEARCH":
+                    return self.search_media(payload)
+                elif kind == "TAP":
+                    return self.phone_tap(payload)
+                elif kind == "SWIPE":
+                    return self.phone_swipe(payload)
+                elif kind == "TYPE":
+                    return self.phone_type(payload)
+                elif kind == "NAV":
+                    return self.phone_nav(payload)
+                elif kind == "SCREENSHOT":
+                    return self.phone_screenshot()
+                elif kind == "DUMPUI":
+                    return self.phone_dump_ui()
+
         # Intercept URL-opening commands and use the dedicated opener
         url_match = re.search(r'"(https?://[^"]+)"', command)
         if not url_match:
@@ -1123,9 +1146,58 @@ class ZourniaCLI:
         except Exception as e:
             return f"Network Error: {e}"
 
+    def request_all_files_access(self):
+        """Open the All Files Access permission page for Termux."""
+        try:
+            # Try to open the MANAGE_EXTERNAL_STORAGE settings for Termux
+            result = subprocess.run(
+                ["sh", "-c", "am start -a android.settings.MANAGE_APP_ALL_FILES_ACCESS_PERMISSION -d package:com.termux"],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0 and "Error" not in result.stdout:
+                print(f"{C_GREEN}Opened All Files Access permission page for Termux.{C_RESET}")
+                print(f"{C_YELLOW}Please enable 'Allow access to manage all files' for Termux.{C_RESET}\n")
+                return True
+        except Exception:
+            pass
+
+        # Fallback: open generic MANAGE_ALL_FILES_ACCESS permission settings
+        try:
+            subprocess.run(
+                ["sh", "-c", "am start -a android.settings.MANAGE_ALL_FILES_ACCESS_PERMISSION"],
+                capture_output=True, text=True, timeout=5
+            )
+            print(f"{C_YELLOW}Opened All Files Access settings. Find Termux and enable the permission.{C_RESET}\n")
+            return True
+        except Exception:
+            pass
+
+        print(f"{C_RED}Could not open permission settings. Grant manually: Settings > Apps > Termux > All Files Access.{C_RESET}\n")
+        return False
+
+    def check_all_files_access(self) -> bool:
+        """Check if Termux has MANAGE_EXTERNAL_STORAGE permission."""
+        try:
+            result = subprocess.run(
+                ["sh", "-c", "appops get com.termux MANAGE_EXTERNAL_STORAGE 2>/dev/null"],
+                capture_output=True, text=True, timeout=3
+            )
+            output = result.stdout.strip()
+            if "allow" in output.lower():
+                return True
+        except Exception:
+            pass
+        return False
+
     def run(self):
         print(BANNER)
-        
+
+        # Auto-check and request All Files Access permission on startup
+        if not self.check_all_files_access():
+            print(f"{C_YELLOW}Termux does not have All Files Access permission.{C_RESET}")
+            self.request_all_files_access()
+            input(f"{C_GREEN}Press Enter after granting the permission to continue...{C_RESET}\n")
+
         # Guard API key check
         if not self.get_api_key():
             print(f"{C_YELLOW}No OpenRouter API key found.{C_RESET}")
@@ -1252,10 +1324,14 @@ class ZourniaCLI:
                             print(f"  {C_GREEN}/return{C_RESET}           Return to WORKSPACE_CORE.")
                             print(f"  {C_GREEN}/telemetry{C_RESET}        Print active environment diagnostics panel.")
                             print(f"  {C_GREEN}!chat{C_RESET}             Chat management (save/load/list/clear/export/config)")
+                            print(f"  {C_GREEN}/permissions{C_RESET}       Open All Files Access permission page for Termux")
                             print(f"  {C_GREEN}/help{C_RESET}             Show this help menu.")
                             print(f"  {C_GREEN}/exit{C_RESET}             Return to WORKSPACE_CORE.")
                             print(f"  {C_GREEN}/exit all{C_RESET}         Exit Zournia completely.\n")
                         
+                        elif cmd == "/permissions":
+                            self.request_all_files_access()
+
                         elif cmd == "/telemetry":
                             print(f"\n{C_WHITE}--- TELEMETRY DIAGNOSTIC PANEL ---{C_RESET}")
                             print(f"Model Selection: {self.selected_model} ({self.get_model_identifier()})")
