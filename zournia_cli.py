@@ -273,9 +273,9 @@ class ZourniaCLI:
         cleaned_lines = []
         for line in response.split("\n"):
             stripped = line.strip().strip("`").strip()
-            if stripped.startswith(("EXECUTE:", "CLOSE:", "SEARCH:", "TAP:", "SWIPE:", "TYPE:", "NAV:", "SCREENSHOT:", "DUMPUI:")):
+            if stripped.startswith(("EXECUTE:", "CLOSE:", "SEARCH:", "TAP:", "SWIPE:", "TYPE:", "NAV:", "SCREENSHOT:", "DUMPUI:", "VISION:")):
                 continue
-            for tag in ["EXECUTE:", "CLOSE:", "SEARCH:", "TAP:", "SWIPE:", "TYPE:", "NAV:", "SCREENSHOT:", "DUMPUI:"]:
+            for tag in ["EXECUTE:", "CLOSE:", "SEARCH:", "TAP:", "SWIPE:", "TYPE:", "NAV:", "SCREENSHOT:", "DUMPUI:", "VISION:"]:
                 idx = line.find(tag)
                 if idx > 0:
                     line = line[:idx].rstrip()
@@ -343,6 +343,9 @@ class ZourniaCLI:
             elif check.startswith("DUMPUI:"):
                 commands.append(("DUMPUI", ""))
                 found_commands.add("DUMPUI")
+            elif check.startswith("VISION:"):
+                commands.append(("VISION", ""))
+                found_commands.add("VISION")
 
         # Fallback: detect commands without colon (e.g. model outputs "DUMPUI" on its own line)
         if not commands:
@@ -350,6 +353,8 @@ class ZourniaCLI:
                 check = self._strip_line(line).upper()
                 if check == "DUMPUI":
                     commands.append(("DUMPUI", ""))
+                elif check == "VISION":
+                    commands.append(("VISION", ""))
                 elif check == "SCREENSHOT":
                     commands.append(("SCREENSHOT", ""))
                 elif check.startswith("EXECUTE ") or check.startswith("EXECUTE\t"):
@@ -495,6 +500,8 @@ class ZourniaCLI:
                     return self.phone_screenshot()
                 elif kind == "DUMPUI":
                     return self.phone_dump_ui()
+                elif kind == "VISION":
+                    return self.phone_screenshot_vision()
 
         # Intercept URL-opening commands and use the dedicated opener
         url_match = re.search(r'"(https?://[^"]+)"', command)
@@ -768,15 +775,81 @@ class ZourniaCLI:
             return f"NAV ERROR: {e}"
 
     def phone_screenshot(self) -> str:
-        """Take a screenshot."""
-        path = "/sdcard/zournia_screenshot.png"
+        """Take a screenshot to Termux tmp (not /sdcard)."""
+        path = os.path.join(os.environ.get("HOME", "/data/data/com.termux/files/home"), "tmp", "zournia_ss.png")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
         try:
             result = subprocess.run(["screencap", "-p", path], capture_output=True, text=True, timeout=5)
-            if result.returncode == 0:
-                return f"SCREENSHOT ACK: Saved to {path}."
+            if result.returncode == 0 and os.path.exists(path) and os.path.getsize(path) > 0:
+                return f"SCREENSHOT ACK: Saved to {path}"
             return f"SCREENSHOT ERROR: {result.stderr}"
         except Exception as e:
             return f"SCREENSHOT ERROR: {e}"
+
+    def phone_screenshot_vision(self) -> str:
+        """Take a screenshot, send to vision model, return UI elements with coordinates. Fast and ephemeral."""
+        import json as _json
+        import base64
+        home = os.environ.get("HOME", "/data/data/com.termux/files/home")
+        tmpdir = os.path.join(home, "tmp")
+        os.makedirs(tmpdir, exist_ok=True)
+        path = os.path.join(tmpdir, "zournia_ss.png")
+        try:
+            subprocess.run(["screencap", "-p", path], capture_output=True, timeout=5)
+            if not os.path.exists(path) or os.path.getsize(path) == 0:
+                return "VISION ERROR: Screenshot failed"
+            with open(path, "rb") as f:
+                img_b64 = base64.b64encode(f.read()).decode("utf-8")
+            os.remove(path)
+        except Exception as e:
+            return f"VISION ERROR: Screenshot: {e}"
+
+        api_key = self.get_api_key()
+        if not api_key:
+            return "VISION ERROR: No API key configured"
+
+        vision_prompt = (
+            "Look at this Android phone screenshot. List every visible UI element with its approximate "
+            "center x,y coordinates. Return ONLY a JSON array like: "
+            '[{"text":"element name","x":540,"y":1200}] '
+            "Include buttons, text fields, icons, tabs, labels. Be precise with coordinates."
+        )
+
+        body = json.dumps({
+            "model": "google/gemini-2.5-flash",
+            "messages": [
+                {"role": "user", "content": [
+                    {"type": "text", "text": vision_prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{img_b64}"}}
+                ]}
+            ],
+            "max_tokens": 1024
+        }).encode("utf-8")
+
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+            "HTTP-Referer": "https://zournia.internal",
+            "X-Title": "Zournia Vision",
+        }
+
+        req = urllib.request.Request(
+            "https://openrouter.ai/api/v1/chat/completions",
+            data=body, headers=headers, method="POST"
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as res:
+                data = json.loads(res.read().decode("utf-8"))
+                content = data["choices"][0]["message"]["content"]
+                if content is None:
+                    return "VISION ERROR: Empty model response"
+                content = content.strip()
+                if content.startswith("```"):
+                    content = content.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+                elements = _json.loads(content)
+                return f"VISION ACK: Found {len(elements)} elements.\n{_json.dumps(elements)}"
+        except Exception as e:
+            return f"VISION ERROR: {e}"
 
     def phone_dump_ui(self) -> str:
         """Dump UI hierarchy using multiple methods."""
@@ -822,7 +895,8 @@ class ZourniaCLI:
                 return self._parse_dumpsys_windows(result.stdout)
         except Exception:
             pass
-        return "DUMPUI ERROR: Need storage permission. Run /permissions, then retry."
+        # Method 4: vision fallback — screenshot + AI describes what it sees
+        return self.phone_screenshot_vision()
 
     def _parse_ui_xml(self, xml: str) -> str:
         import json as _json
@@ -1150,6 +1224,7 @@ class ZourniaCLI:
                 f"NAV: <action> (back, home, recents, enter, delete, tab, escape, power, volume_up, volume_down)\n"
                 f"SCREENSHOT:\n"
                 f"DUMPUI:\n"
+                f"VISION: - screenshot + AI vision, returns coordinates of all visible elements\n"
                 f"Multiple functions can be output, one per line.\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
             )
@@ -1174,6 +1249,7 @@ class ZourniaCLI:
                 f"NAV: <action> (back, home, recents, enter, delete, tab, escape, power, volume_up, volume_down)\n"
                 f"SCREENSHOT:\n"
                 f"DUMPUI:\n"
+                f"VISION: - screenshot + AI vision, returns coordinates of all visible elements\n"
                 f"Multiple functions can be output, one per line.\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
             )
@@ -1365,6 +1441,10 @@ class ZourniaCLI:
                                 ack = self.phone_dump_ui()
                                 print(f"{C_GREEN}{ack}{C_RESET}\n")
                                 chat_history.append(("user", f"UI dump confirmation received.\n\n{ack}"))
+                            elif kind == "VISION":
+                                ack = self.phone_screenshot_vision()
+                                print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                chat_history.append(("user", f"Vision confirmation received.\n\n{ack}"))
 
                 else:
                     prompt = input(f"{C_GREEN}ZOURNIA // WORKSPACE_CORE > {C_RESET}").strip()
@@ -1593,6 +1673,10 @@ class ZourniaCLI:
                                 ack = self.phone_dump_ui()
                                 print(f"{C_GREEN}{ack}{C_RESET}\n")
                                 chat_history.append(("user", f"UI dump confirmation received.\n\n{ack}"))
+                            elif kind == "VISION":
+                                ack = self.phone_screenshot_vision()
+                                print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                chat_history.append(("user", f"Vision confirmation received.\n\n{ack}"))
 
             except KeyboardInterrupt:
                 print(f"\n{C_YELLOW}Use /exit to quit.{C_RESET}\n")
