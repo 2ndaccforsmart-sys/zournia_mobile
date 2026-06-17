@@ -750,38 +750,91 @@ class ZourniaCLI:
     def phone_dump_ui(self) -> str:
         """Dump UI hierarchy and return element positions."""
         import json as _json
+        import re as _re
         path = "/sdcard/zournia_ui.xml"
         env = dict(os.environ)
-        env["TMPDIR"] = os.environ.get("TMPDIR", os.path.join(os.environ.get("HOME", "/data/data/com.termux/files/home"), "tmp"))
-        os.makedirs(env["TMPDIR"], exist_ok=True)
+        home = os.environ.get("HOME", "/data/data/com.termux/files/home")
+        tmpdir = os.path.join(home, "tmp")
+        env["TMPDIR"] = tmpdir
+        os.makedirs(tmpdir, exist_ok=True)
         try:
-            subprocess.run(["mkdir", "-p", "/data/local/tmp/dalvik-cache"], capture_output=True, timeout=3)
+            subprocess.run(["su", "-c", "mkdir -p /data/local/tmp/dalvik-cache"], capture_output=True, timeout=3)
         except Exception:
             pass
         try:
             result = subprocess.run(["uiautomator", "dump", path], capture_output=True, text=True, timeout=10, env=env)
-            if result.returncode == 0:
-                cat_result = subprocess.run(["cat", [path]], capture_output=True, text=True, timeout=5)
-                xml = cat_result.stdout
-                bounds = []
-                import re as _re
-                node_regex = _re.compile(r'<node[^>]*>')
-                bounds_regex = _re.compile(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"')
-                text_regex = _re.compile(r'text="([^"]*)"')
-                for match in node_regex.finditer(xml):
-                    node = match.group(0)
-                    b = bounds_regex.search(node)
-                    t = text_regex.search(node)
-                    if b:
+            if result.returncode == 0 and os.path.exists(path):
+                with open(path, "r", encoding="utf-8", errors="replace") as f:
+                    xml = f.read()
+                return self._parse_ui_xml(xml)
+            if "dalvik-cache" in (result.stderr or ""):
+                try:
+                    subprocess.run(["su", "-c", "chmod 777 /data/local/tmp/dalvik-cache"], capture_output=True, timeout=3)
+                    result = subprocess.run(["uiautomator", "dump", path], capture_output=True, text=True, timeout=10, env=env)
+                    if result.returncode == 0 and os.path.exists(path):
+                        with open(path, "r", encoding="utf-8", errors="replace") as f:
+                            xml = f.read()
+                        return self._parse_ui_xml(xml)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        try:
+            result = subprocess.run(["dumpsys", "activity", "top"], capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and result.stdout:
+                return self._parse_dumpsys_ui(result.stdout)
+        except Exception:
+            pass
+        return "DUMPUI ERROR: uiautomator not available. Grant storage permission or root access."
+
+    def _parse_ui_xml(self, xml: str) -> str:
+        import json as _json
+        import re as _re
+        bounds_regex = _re.compile(r'bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"')
+        text_regex = _re.compile(r'text="([^"]*)"')
+        node_regex = _re.compile(r'<node[^>]*>')
+        bounds = []
+        for match in node_regex.finditer(xml):
+            node = match.group(0)
+            b = bounds_regex.search(node)
+            t = text_regex.search(node)
+            if b:
+                bounds.append({
+                    "x1": int(b.group(1)), "y1": int(b.group(2)),
+                    "x2": int(b.group(3)), "y2": int(b.group(4)),
+                    "text": t.group(1) if t else "",
+                })
+        return f"DUMPUI ACK: Found {len(bounds)} UI elements.\n{_json.dumps(bounds)}"
+
+    def _parse_dumpsys_ui(self, dumpsys: str) -> str:
+        import json as _json
+        import re as _re
+        bounds = []
+        view_regex = _re.compile(r'View\s+\[#(\d+)\]\s+(\S+).*?\[(\d+),(\d+)\]\[(\d+),(\d+)\]')
+        text_regex = _re.compile(r'mText=(\S+)')
+        for line in dumpsys.split("\n"):
+            vm = view_regex.search(line)
+            if vm:
+                entry = {
+                    "x1": int(vm.group(3)), "y1": int(vm.group(4)),
+                    "x2": int(vm.group(5)), "y2": int(vm.group(6)),
+                    "id": vm.group(2), "text": "",
+                }
+                tm = text_regex.search(line)
+                if tm:
+                    entry["text"] = tm.group(1)
+                bounds.append(entry)
+        if not bounds:
+            for line in dumpsys.split("\n"):
+                if "View" in line and "[" in line:
+                    coord_match = _re.compile(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]').search(line)
+                    if coord_match:
                         bounds.append({
-                            "x1": int(b.group(1)), "y1": int(b.group(2)),
-                            "x2": int(b.group(3)), "y2": int(b.group(4)),
-                            "text": t.group(1) if t else "",
+                            "x1": int(coord_match.group(1)), "y1": int(coord_match.group(2)),
+                            "x2": int(coord_match.group(3)), "y2": int(coord_match.group(4)),
+                            "text": "",
                         })
-                return f"DUMPUI ACK: Found {len(bounds)} UI elements.\n{_json.dumps(bounds)}"
-            return f"DUMPUI ERROR: {result.stderr}"
-        except Exception as e:
-            return f"DUMPUI ERROR: {e}"
+        return f"DUMPUI ACK: Found {len(bounds)} UI elements (fallback).\n{_json.dumps(bounds)}"
 
     def search_media(self, query: str) -> str:
         """Route a search query to the appropriate app or URL.
