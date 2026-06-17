@@ -779,7 +779,7 @@ class ZourniaCLI:
             return f"SCREENSHOT ERROR: {e}"
 
     def phone_dump_ui(self) -> str:
-        """Dump UI hierarchy and return element positions."""
+        """Dump UI hierarchy using multiple methods."""
         import json as _json
         import re as _re
         path = "/sdcard/zournia_ui.xml"
@@ -788,37 +788,41 @@ class ZourniaCLI:
         tmpdir = os.path.join(home, "tmp")
         env["TMPDIR"] = tmpdir
         os.makedirs(tmpdir, exist_ok=True)
+        # Method 1: cmd uiautomator (uses Android framework, may bypass dalvik-cache)
+        try:
+            result = subprocess.run(
+                ["cmd", "uiautomator", "dump", path],
+                capture_output=True, text=True, timeout=10, env=env
+            )
+            if result.returncode == 0 and os.path.exists(path):
+                with open(path, "r", encoding="utf-8", errors="replace") as f:
+                    xml = f.read()
+                if "<node" in xml:
+                    return self._parse_ui_xml(xml)
+        except Exception:
+            pass
+        # Method 2: uiautomator dump directly
         try:
             subprocess.run(["su", "-c", "mkdir -p /data/local/tmp/dalvik-cache"], capture_output=True, timeout=3)
         except Exception:
             pass
-        # Try uiautomator dump
         try:
             result = subprocess.run(["uiautomator", "dump", path], capture_output=True, text=True, timeout=10, env=env)
             if result.returncode == 0 and os.path.exists(path):
                 with open(path, "r", encoding="utf-8", errors="replace") as f:
                     xml = f.read()
-                return self._parse_ui_xml(xml)
-            if "dalvik-cache" in (result.stderr or ""):
-                try:
-                    subprocess.run(["su", "-c", "chmod 777 /data/local/tmp/dalvik-cache"], capture_output=True, timeout=3)
-                    result = subprocess.run(["uiautomator", "dump", path], capture_output=True, text=True, timeout=10, env=env)
-                    if result.returncode == 0 and os.path.exists(path):
-                        with open(path, "r", encoding="utf-8", errors="replace") as f:
-                            xml = f.read()
-                        return self._parse_ui_xml(xml)
-                except Exception:
-                    pass
+                if "<node" in xml:
+                    return self._parse_ui_xml(xml)
         except Exception:
             pass
-        # Fallback: try dumpsys input to get window/display info
+        # Method 3: dumpsys window for basic window rectangles
         try:
-            result = subprocess.run(["dumpsys", "input"], capture_output=True, text=True, timeout=5)
+            result = subprocess.run(["dumpsys", "window", "windows"], capture_output=True, text=True, timeout=5)
             if result.returncode == 0 and result.stdout:
-                return self._parse_dumpsys_input(result.stdout)
+                return self._parse_dumpsys_windows(result.stdout)
         except Exception:
             pass
-        return "DUMPUI ERROR: uiautomator needs storage permission. Run /permissions to grant it."
+        return "DUMPUI ERROR: Need storage permission. Run /permissions, then retry."
 
     def _parse_ui_xml(self, xml: str) -> str:
         import json as _json
@@ -839,22 +843,32 @@ class ZourniaCLI:
                 })
         return f"DUMPUI ACK: Found {len(bounds)} UI elements.\n{_json.dumps(bounds)}"
 
-    def _parse_dumpsys_input(self, dumpsys: str) -> str:
-        """Parse dumpsys input for display info and touchable regions."""
+    def _parse_dumpsys_windows(self, dumpsys: str) -> str:
+        """Parse dumpsys window for window rectangles."""
         import json as _json
         import re as _re
         elements = []
-        display_match = _re.search(r'DisplayWidth=(\d+).*?DisplayHeight=(\d+)', dumpsys)
-        if display_match:
-            w, h = int(display_match.group(1)), int(display_match.group(2))
-            elements.append({"type": "display", "width": w, "height": h})
-        region_matches = _re.findall(r'Window\{[^}]*\s+(\S+)\s+\[(\d+),(\d+)\]\[(\d+),(\d+)\]', dumpsys)
-        for name, x1, y1, x2, y2 in region_matches:
+        window_matches = _re.findall(
+            r'Window #\d+ Window\{[a-f0-9]+ \w+\s+(\S+)\}:\s+'
+            r'mFrame=\[(\d+),(\d+)\]\[(\d+),(\d+)\]',
+            dumpsys
+        )
+        for name, x1, y1, x2, y2 in window_matches:
             elements.append({
                 "x1": int(x1), "y1": int(y1), "x2": int(x2), "y2": int(y2),
                 "text": name,
             })
-        return f"DUMPUI ACK: Found {len(elements)} display elements (dumpsys fallback).\n{_json.dumps(elements)}"
+        if not elements:
+            frame_matches = _re.findall(
+                r'mFrame=\[(\d+),(\d+)\]\[(\d+),(\d+)\]',
+                dumpsys
+            )
+            for x1, y1, x2, y2 in frame_matches:
+                elements.append({
+                    "x1": int(x1), "y1": int(y1), "x2": int(x2), "y2": int(y2),
+                    "text": "window",
+                })
+        return f"DUMPUI ACK: Found {len(elements)} windows.\n{_json.dumps(elements)}"
 
     def search_media(self, query: str) -> str:
         """Route a search query to the appropriate app or URL.
@@ -1124,24 +1138,19 @@ class ZourniaCLI:
 
         if self.chat_mode == "automation":
             system_prompt = (
-                f"You are Zournia, an Android phone assistant.\n"
-                f"CRITICAL RULE: Words and text DO NOTHING. Only COMMANDS have effect. You MUST output commands to do anything.\n"
-                f"Saying 'Opening YouTube' does NOT open YouTube. You must output SEARCH: youtube or EXECUTE: am start ...\n"
-                f"OUTPUT: Short reply (1-5 words), then one command per line below it.\n"
-                f"MULTI-STEP: You can output multiple commands on separate lines. Each on its own line.\n"
-                f"Commands:\n"
-                f"EXECUTE: <command> — run terminal command\n"
-                f"SEARCH: <platform> <query> — youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud\n"
-                f"CLOSE: <name> — close an app\n"
-                f"TAP: <x> <y> — tap coordinates\n"
-                f"SWIPE: <x1> <y1> <x2> <y2> — swipe\n"
-                f"TYPE: <text> — type text\n"
-                f"NAV: <action> — back, home, recents, enter, delete, tab, escape, power, volume_up, volume_down\n"
-                f"SCREENSHOT: — screenshot\n"
-                f"DUMPUI: — scan screen elements with coordinates\n"
-                f"Example: 'play despacito' → 'Sure.' then SEARCH: youtube despacito\n"
-                f"Example: 'open YouTube and search funny cats' → 'Opening.' then SEARCH: youtube funny cats\n"
-                f"If user asks to open an app, use SEARCH: or EXECUTE:. Never just say the words.\n\n"
+                f"You are a function-calling tool. Given a user request, output the matching function call.\n"
+                f"Reply with a very short confirmation, then on the next line output the function call.\n"
+                f"Functions:\n"
+                f"EXECUTE: <command>\n"
+                f"SEARCH: <platform> <query> (platforms: youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud)\n"
+                f"CLOSE: <name>\n"
+                f"TAP: <x> <y>\n"
+                f"SWIPE: <x1> <y1> <x2> <y2>\n"
+                f"TYPE: <text>\n"
+                f"NAV: <action> (back, home, recents, enter, delete, tab, escape, power, volume_up, volume_down)\n"
+                f"SCREENSHOT:\n"
+                f"DUMPUI:\n"
+                f"Multiple functions can be output, one per line.\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
             )
         elif self.chat_mode == "normal":
@@ -1153,24 +1162,19 @@ class ZourniaCLI:
             )
         else:
             system_prompt = (
-                f"You are Zournia, an Android phone assistant.\n"
-                f"CRITICAL RULE: Words and text DO NOTHING. Only COMMANDS have effect. You MUST output commands to do anything.\n"
-                f"Saying 'Opening YouTube' does NOT open YouTube. You must output SEARCH: youtube or EXECUTE: am start ...\n"
-                f"OUTPUT: Short reply (1-5 words), then one command per line below it.\n"
-                f"MULTI-STEP: You can output multiple commands on separate lines. Each on its own line.\n"
-                f"Commands:\n"
-                f"EXECUTE: <command> — run terminal command\n"
-                f"SEARCH: <platform> <query> — youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud\n"
-                f"CLOSE: <name> — close an app\n"
-                f"TAP: <x> <y> — tap coordinates\n"
-                f"SWIPE: <x1> <y1> <x2> <y2> — swipe\n"
-                f"TYPE: <text> — type text\n"
-                f"NAV: <action> — back, home, recents, enter, delete, tab, escape, power, volume_up, volume_down\n"
-                f"SCREENSHOT: — screenshot\n"
-                f"DUMPUI: — scan screen elements with coordinates\n"
-                f"Example: 'play despacito' → 'Sure.' then SEARCH: youtube despacito\n"
-                f"Example: 'open YouTube and search funny cats' → 'Opening.' then SEARCH: youtube funny cats\n"
-                f"If user asks to open an app, use SEARCH: or EXECUTE:. Never just say the words.\n\n"
+                f"You are a function-calling tool. Given a user request, output the matching function call.\n"
+                f"Reply with a very short confirmation, then on the next line output the function call.\n"
+                f"Functions:\n"
+                f"EXECUTE: <command>\n"
+                f"SEARCH: <platform> <query> (platforms: youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud)\n"
+                f"CLOSE: <name>\n"
+                f"TAP: <x> <y>\n"
+                f"SWIPE: <x1> <y1> <x2> <y2>\n"
+                f"TYPE: <text>\n"
+                f"NAV: <action> (back, home, recents, enter, delete, tab, escape, power, volume_up, volume_down)\n"
+                f"SCREENSHOT:\n"
+                f"DUMPUI:\n"
+                f"Multiple functions can be output, one per line.\n\n"
                 f"{session_state_str}\n\n{system_info_str}"
             )
 
@@ -1191,7 +1195,7 @@ class ZourniaCLI:
         body = json.dumps({
             "model": model_name,
             "messages": messages_payload,
-            "max_tokens": 1024
+            "max_tokens": 1024,
         }).encode('utf-8')
 
         req = urllib.request.Request(url, data=body, headers=headers, method="POST")
@@ -1307,7 +1311,12 @@ class ZourniaCLI:
                     print(f"{C_GREY}Thinking...{C_RESET}", end="\r")
                     response = self.get_ai_response(prompt, chat_history)
                     retries = 0
-                    while response is None or (isinstance(response, str) and response.strip() == "") and retries < 2:
+                    safety_words = ["user safety", "safety:", "i can't", "i cannot", "i'm not able", "i'm sorry", "i apologize", "not appropriate", "can't assist"]
+                    while retries < 2 and (
+                        response is None
+                        or (isinstance(response, str) and response.strip() == "")
+                        or (isinstance(response, str) and any(w in response.lower() for w in safety_words) and not any(c in response for c in ["EXECUTE:", "SEARCH:", "TAP:", "SWIPE:", "TYPE:", "NAV:", "CLOSE:", "SCREENSHOT:", "DUMPUI:"]))
+                    ):
                         retries += 1
                         response = self.get_ai_response(prompt, chat_history)
                     print(" " * 20, end="\r")
@@ -1530,7 +1539,12 @@ class ZourniaCLI:
                         print(f"{C_GREY}Thinking...{C_RESET}", end="\r")
                         response = self.get_ai_response(prompt, chat_history)
                         retries = 0
-                        while (response is None or (isinstance(response, str) and "empty content" in response.lower())) and retries < 2:
+                        safety_words = ["user safety", "safety:", "i can't", "i cannot", "i'm not able", "i'm sorry", "i apologize", "not appropriate", "can't assist"]
+                        while retries < 2 and (
+                            response is None
+                            or (isinstance(response, str) and response.strip() == "")
+                            or (isinstance(response, str) and any(w in response.lower() for w in safety_words) and not any(c in response for c in ["EXECUTE:", "SEARCH:", "TAP:", "SWIPE:", "TYPE:", "NAV:", "CLOSE:", "SCREENSHOT:", "DUMPUI:"]))
+                        ):
                             retries += 1
                             response = self.get_ai_response(prompt, chat_history)
                         print(" " * 20, end="\r")
