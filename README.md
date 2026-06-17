@@ -1,166 +1,223 @@
-# Zournia Mobile — Termux & APK Port
+# Zournia Mobile — AI Phone Controller & Automation Suite
 
-A mobile-friendly adaptation of Zournia OS, optimized for deployment on Android phones either as a native APK or as an interactive CLI application inside Termux.
+A full-stack AI automation system that controls your Android phone like a human. Includes a PC-style cursor, dynamic app discovery, media search, and phone control — all powered by AI.
 
 ## Features
 
-- **Termux CLI Option (`zournia_cli.py`)**:
-  - Direct execution of system automation commands inside the Termux shell.
-  - Zero-dependency Python script using standard libraries (no external package installations needed).
-  - Diagnostic Telemetry Panel (`/telemetry` command) tracking session state and processes.
-  - Interactive slash commands for model selection (`/model`) and chat mode toggling (`/mode`).
-- **Android APK Option**:
-  - Full Flutter UI styled with the Zournia premium dark design system.
-  - Dynamic window and title bar controls hidden on mobile to avoid layout issues.
-  - Dynamic AI response system prompt adjusting to the Android context (using Linux shell tools instead of Windows utilities).
-  - Secure local storage for API keys (`api_keys.json`) and custom models.
-- **Unrestricted Control**:
-  - Removed local security jail constraints in both Python and Flutter paths to allow unrestricted system execution.
-- **Intelligent Package Checker & Browser Fallback**:
-  - Automatically queries the device package manager (`pm list packages`/`pm path` with redirection to bypass SELinux restrictions) to verify if an app is installed.
-  - Launches popular apps directly using targeted launch activities (ChatGPT, Discord, YouTube, Telegram, WhatsApp, Spotify, Settings, etc.).
-  - Gracefully falls back to browser URL launch or Google Search in Chrome when the app is not installed on the device.
-- **Improved URL & Search Handling**:
-  - Handles space-containing search strings by encoding space characters as `%20` and using quote-aware regex.
-- **Silent Launch Telemetry**:
-  - Suppresses activity intent outputs and warnings to keep the conversation logs clean.
-- **Git & CI/CD Ready**:
-  - Updated GitHub Actions workflow (`.github/workflows/build_apk.yml`) leveraging the latest stable Flutter SDK.
+### Phone Control (AI-Driven)
+- **TAP** — AI taps at screen coordinates with animated cursor
+- **SWIPE** — AI swipes with human-like movement
+- **TYPE** — AI types text via keyboard
+- **NAV** — Back, home, recents, enter, delete, tab, escape, power, volume
+- **SCREENSHOT** — Capture screen state
+- **DUMPUI** — Scan screen, list all UI elements with coordinates
+
+### PC-Style Cursor Overlay
+- Cubic Bezier curve movement with micro-jitter (human-like hand tremor)
+- Cyan trail showing cursor path
+- Click ripple animation
+- Variable speed based on distance
+
+### Dynamic App Discovery
+- Scans installed apps every 12 hours in background (headless, no user input)
+- Resolves launcher activities automatically
+- Builds its own knowledge of how to operate apps on your phone
+- 70+ known apps pre-mapped for instant recognition
+
+### Media Search & Playback
+- **SEARCH: platform query** — YouTube, Spotify, Netflix, TikTok, Google, Amazon, Twitch, SoundCloud
+- Deep links into apps, falls back to browser if not installed
+
+### Smart Learning
+- After 3+ uses of the same request, AI builds a direct shortcut (skips UI scanning)
+
+### Chat Management
+- `!chat save [name]` — Save chat
+- `!chat load <name>` — Load chat
+- `!chat continue <name>` — Continue a saved chat
+- `!chat list` — List saved chats
+- `!chat export [name]` — Export as text
+- `!chat clear` — Clear history
+- `!chat config` — Show configuration
+
+### Multi-Provider AI (25+ Providers)
+| Provider | Type |
+|----------|------|
+| OpenRouter | Aggregator (hundreds of models) |
+| OpenAI | GPT-4, GPT-4o |
+| Anthropic | Claude Sonnet, Claude Opus |
+| Google Gemini | Gemini 2.5 Flash |
+| Cerebras | Ultra-fast inference |
+| Groq | LPU hardware (100+ tok/s) |
+| Fireworks AI | Low-latency open-source |
+| Mistral AI | Open-weight models |
+| Together AI | 200+ open-source models |
+| DeepInfra | Cheap serverless |
+| WaveSpeed AI | 290+ models, zero cold-start |
+| AI/ML API | Unified portal |
+| SiliconFlow | Global cost-efficient |
+| Hugging Face | Free serverless API |
+| Cohere, Replicate, Perplexity, DeepSeek, Ollama, LM Studio, Voyage AI, AI21 Labs, OctoAI, Anyscale, OpenWebUI | ...and more |
 
 ---
 
-## Option 1: Termux CLI (Fastest & Native Control)
+## Option 1: Termux CLI
 
-To run Zournia natively on your phone inside the Termux terminal:
-
-### 1. Installation
-Open Termux on your phone and run:
+### Install
 ```bash
-# Update package list and upgrade existing tools
 pkg update && pkg upgrade
-
-# Install Python and Git
 pkg install python git
-
-# Clone the repository
 git clone https://github.com/2ndaccforsmart-sys/zournia_mobile.git
 cd zournia_mobile
 ```
 
-### 2. Running the Client
-Start the interactive client:
+### Run
 ```bash
 python zournia_cli.py
 ```
-*On the first run, the client will prompt you to paste your OpenRouter API key. This key will be saved locally to `api_keys.json` and `api_key.txt` and is kept synchronized with the Flutter app.*
 
-### 3. CLI Commands
-- `/help` — Displays all available console commands.
-- `/telemetry` — Prints active session states, process registry (PIDs), and Termux environment variables.
-- `/model [name]` — Switches the active model (e.g. `Gemini`, `Qwen`, or custom).
-- `/mode [default|automation]` — Toggles chat automation mode.
-- `/exit` — Closes the terminal client.
+### CLI Commands
+| Command | Description |
+|---------|-------------|
+| `/chat` | Enter chat mode |
+| `/model [name]` | Switch model |
+| `/model key <provider> <key>` | Set API key |
+| `/model add <name> <id>` | Add custom model |
+| `/mode [default\|automation\|normal]` | Switch mode |
+| `/telemetry` | Session diagnostics |
+| `/help` | Show help |
+| `!chat` | Chat management |
+| `/exit` | Exit |
+
+### Automation Commands (in chat)
+```
+EXECUTE: <command>        — Run any shell command
+TAP: <x> <y>              — Tap at coordinates
+SWIPE: <x1> <y1> <x2> <y2> [ms]  — Swipe gesture
+TYPE: <text>              — Type text
+NAV: <action>             — back, home, recents, enter, delete, tab, escape
+SCREENSHOT:               — Take screenshot
+DUMPUI:                   — Scan screen elements
+SEARCH: <platform> <query> — YouTube, Spotify, Netflix, TikTok, etc.
+CLOSE: <target>           — Kill process
+```
+
+### Quick Start
+```bash
+python zournia_cli.py
+# Paste API key when prompted
+
+# Enter chat mode
+/chat
+
+# Try these:
+play despacito on YouTube
+open Instagram
+tap on the search bar
+swipe up to scroll
+go back
+take a screenshot
+what apps do I have installed
+```
 
 ---
 
-## Option 2: Android APK App
+## Option 2: Android APK
 
-You can compile the application to a native `.apk` file:
-
-### Method A: Local Compilation (Recommended for instant access)
-If you have the Flutter SDK and Android SDK installed on your machine:
+### Build Locally
 ```bash
-# Get Flutter dependencies
 flutter pub get
-
-# Compile release APK
 flutter build apk --release
 ```
-The resulting APK will be saved at:
-`build/app/outputs/flutter-apk/app-release.apk`
-You can transfer this file directly to your phone and install it.
+APK: `build/app/outputs/flutter-apk/app-release.apk`
 
-### Method B: Automated GitHub Actions
-1. Push this folder to your GitHub repository.
-2. Navigate to the **Actions** tab on your GitHub repository page.
-3. Select the **Build Zournia Mobile APK** workflow.
-4. Download the compiled `zournia-mobile-apk` artifact from the run details, transfer it to your phone, and install.
+### Build via GitHub Actions
+1. Push to GitHub
+2. Go to **Actions** tab
+3. Select **Build Zournia Mobile APK**
+4. Download the artifact
 
 ---
 
 ## Configuration Files
 
-- `api_keys.json` — Stores your API keys securely.
-- `custom_models.json` — Defines custom OpenRouter models to use in the dropdown or `/model` selector. Format:
-  ```json
-  [
-    {
-      "name": "Claude 3.5 Sonnet",
-      "identifier": "anthropic/claude-3.5-sonnet",
-      "provider": "OpenRouter"
-    }
-  ]
-  ```
+| File | Purpose |
+|------|---------|
+| `api_keys.json` | API keys for all providers |
+| `api_key.txt` | Legacy single-key file (synced with api_keys.json) |
+| `custom_models.json` | Custom model definitions |
+| `learned_patterns.json` | AI-learned shortcuts |
+| `discovered_apps.json` | Scanned installed apps cache |
+| `saved_chats/` | Saved chat histories |
+| `session_state.json` | Active session state |
 
 ---
 
-## Uncensored & Unrestricted Models (100% Free & Cardless Setup)
+## Free Model Setup (No Card Required)
 
-*Note: Together AI now requires a bank card deposit to activate its API. If you want a **100% free setup with zero credit cards, bank cards, or deposits**, follow the OpenRouter Free model setup below:*
+### Option A: OpenRouter Free
+1. Sign up at [openrouter.ai](https://openrouter.ai)
+2. Create an API key (no payment needed)
+3. Run `python zournia_cli.py` and paste the key
+4. The bot defaults to `FreeModel` (openrouter/free) — fully free
 
-### 1. Generate a Free OpenRouter API Key (No Card / No Deposit)
-1. Go to [OpenRouter](https://openrouter.ai/) and sign up for an account (takes 5 seconds via Google, GitHub, or email).
-2. Go to **Keys** in the top navigation -> click **Create Key** -> copy your new API Key.
-*You do not need to add any payment methods or balance.*
+### Option B: Hugging Face (Free)
+1. Sign up at [huggingface.co](https://huggingface.co)
+2. Create a Read/Write access token
+3. In Zournia CLI: `/model key "Hugging Face" <token>`
+4. Switch model: `/model Hermes` or `/model Dolphin`
 
-### 2. Configure Your Key in Zournia CLI
-1. Open Termux on your phone and run:
-   ```bash
-   python zournia_cli.py
-   ```
-2. When prompted, paste your OpenRouter key (or set it manually with `/model key openrouter <key>`).
-
-### 3. Switch to FreeModel and Enable Automation
-1. The bot is configured to run **FreeModel** (`openrouter/free`) by default on startup. This automatically routes requests to available free-tier models (like Llama 3 8B, Qwen 2.5, or Mistral 7B) completely for free.
-2. Toggle automation mode:
-   ```text
-   /mode automation
-   ```
-*Our custom developer sandbox system prompts will run automatically to bypass standard alignment restrictions on Llama / Qwen models, giving you a fully unrestricted assistant for free!*
+### Option C: Google Gemini (Free Tier)
+1. Get API key from [Google AI Studio](https://aistudio.google.com/apikey)
+2. In Zournia CLI: `/model key "Google Gemini" <key>`
+3. Switch model: `/model Gemini`
+4. Free tier: 1,500 requests/day
 
 ---
 
-## Uncensored Dolphin & Hermes (100% Free & Cardless Setup)
+## How Phone Automation Works
 
-If you specifically want **Dolphin** or **Hermes** uncensored models without setting up any cards/payments:
+1. You type: "open Instagram and like the first post"
+2. AI scans the screen (`DUMPUI:`) to find UI elements
+3. AI outputs `EXECUTE: monkey -p com.instagram.android 1` to open Instagram
+4. AI outputs `DUMPUI:` again to see the new screen
+5. AI outputs `TAP: 500 300` to tap the first post
+6. Cursor animates to (500, 300) with human-like movement
+7. Click ripple plays, `input tap 500 300` executes
+8. After 3+ uses of the same pattern, AI learns a shortcut and skips scanning
 
-### 1. Get a Free Hugging Face API Token
-1. Go to [Hugging Face](https://huggingface.co/) and sign up for a free account.
-2. Go to **Settings -> Access Tokens** in your profile menu.
-3. Click **Create New Token**, set the type to **Read** or **Write**, and copy the token (`hf_...`).
-*Hugging Face's Serverless API is completely free and requires zero payment details.*
+---
 
-### 2. Configure Your Key in Zournia CLI
-1. Open Termux on your phone and launch Zournia:
-   ```bash
-   python zournia_cli.py
-   ```
-2. Save your Hugging Face key:
-   ```text
-   /model key "Hugging Face" <YOUR_HF_TOKEN>
-   ```
+## Architecture
 
-### 3. Switch to Dolphin or Hermes
-1. Set the model to Hermes (routes to `NousResearch/Nous-Hermes-2-Mixtral-8x7B-DPO` on Hugging Face):
-   ```text
-   /model Hermes
-   ```
-2. Or set the model to Dolphin (routes to `cognitivecomputations/dolphin-2.6-mixtral-8x7b` on Hugging Face):
-   ```text
-   /model Dolphin
-   ```
-3. Set mode to automation:
-   ```text
-   /mode automation
-   ```
-*Zournia will automatically detect your Hugging Face key and route queries directly to Hugging Face's serverless endpoint for free.*
+```
+zournia_mobile/
+├── zournia_cli.py                    # Python CLI (Termux)
+├── lib/
+│   ├── main.dart                     # Flutter entry point
+│   ├── features/
+│   │   ├── shell/presentation/
+│   │   │   └── zournia_shell.dart    # Main UI + AI logic + automation
+│   │   ├── automation/
+│   │   │   ├── data/
+│   │   │   │   ├── phone_controller.dart  # Phone control + DUMPUI cache
+│   │   │   │   └── app_scanner.dart       # Dynamic app discovery
+│   │   │   └── presentation/
+│   │   │       └── cursor_overlay.dart    # PC-style cursor
+│   │   ├── ui_components/
+│   │   │   └── dropdown_menu.dart
+│   │   ├── dashboard/
+│   │   └── workspace_router/
+│   └── core/
+│       ├── security/                 # Security jail (disabled)
+│       ├── theme/                    # Dark/light theme
+│       └── update/                   # Auto-updater
+└── .github/workflows/
+    └── build_apk.yml                 # CI/CD
+```
+
+---
+
+## License
+
+Internal project — not for redistribution.
