@@ -395,8 +395,12 @@ class ZourniaCLI:
             "  * Settings: monkey -p com.android.settings 1\n"
             "  * Do NOT use 'am start <package_name>' directly as it will fail without the exact activity class path.\n\n"
             "Browser Commands:\n"
-            "- To open a URL in a NEW Chrome tab: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome\n"
-            "- To search Google: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome\n\n"
+            "- ALWAYS use Chrome as the default browser. NEVER open URLs without specifying com.android.chrome package.\n"
+            "- To open a URL in Chrome: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome\n"
+            "- To search Google in Chrome: EXECUTE: am start -a android.intent.action.VIEW -d \"https://www.google.com/search?q=<query>\" com.android.chrome\n"
+            "- When user says 'open X in chrome', search Google for X in Chrome: SEARCH: google <X>\n"
+            "- When user provides a URL (http/https), ALWAYS open it in Chrome: EXECUTE: am start -a android.intent.action.VIEW -d \"<url>\" com.android.chrome\n"
+            "- When user asks to view an image URL, ALWAYS open it in Chrome: EXECUTE: am start -a android.intent.action.VIEW -d \"<image_url>\" com.android.chrome\n\n"
             "Media Search & Playback (SEARCH: command):\n"
             "- To search and play videos/music, use: SEARCH: <platform> <query>\n"
             "- Supported platforms: youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud\n"
@@ -518,10 +522,21 @@ class ZourniaCLI:
         return None
 
     def open_url(self, url: str) -> str:
-        """Try every possible method to open a URL in the default browser."""
+        """Try every possible method to open a URL, defaulting to Chrome."""
         print(f"{C_YELLOW}Opening: {url}{C_RESET}")
 
-        # Method 1: am start without specifying package (uses default browser)
+        # Method 1: Chrome via explicit package (preferred default)
+        try:
+            r = subprocess.run(
+                ["am", "start", "-a", "android.intent.action.VIEW", "-d", url, "com.android.chrome"],
+                capture_output=True, text=True, timeout=5
+            )
+            if r.returncode == 0:
+                return f"EXECUTION ACK: Opened {url}."
+        except Exception:
+            pass
+
+        # Method 2: am start without specifying package (system default browser)
         try:
             r = subprocess.run(
                 ["am", "start", "-a", "android.intent.action.VIEW", "-d", url],
@@ -532,7 +547,7 @@ class ZourniaCLI:
         except Exception:
             pass
 
-        # Method 2: termux-open (uses Termux's default handler)
+        # Method 3: termux-open (uses Termux's default handler)
         try:
             r = subprocess.run(["termux-open", url], capture_output=True, text=True, timeout=5)
             if r.returncode == 0:
@@ -540,21 +555,10 @@ class ZourniaCLI:
         except Exception:
             pass
 
-        # Method 3: Python webbrowser
+        # Method 4: Python webbrowser
         try:
             if webbrowser.open(url):
                 return f"EXECUTION ACK: Opened {url}."
-        except Exception:
-            pass
-
-        # Method 4: Try Chrome as last resort
-        try:
-            r = subprocess.run(
-                ["am", "start", "-a", "android.intent.action.VIEW", "-d", url, "com.android.chrome"],
-                capture_output=True, text=True, timeout=5
-            )
-            if r.returncode == 0:
-                return f"EXECUTION ACK: Opened {url} (via Chrome)."
         except Exception:
             pass
 
@@ -1288,6 +1292,8 @@ class ZourniaCLI:
             system_prompt = (
                 f"You are a function-calling tool. Given a user request, output the matching function call.\n"
                 f"Reply with a very short confirmation, then on the next line output the function call.\n"
+                f"CRITICAL: ALWAYS use Chrome as the default browser. For EXECUTE commands that open URLs, ALWAYS include 'com.android.chrome' at the end.\n"
+                f"CRITICAL: When user says 'in chrome', use SEARCH: google <query> to open in Chrome browser.\n"
                 f"Functions:\n"
                 f"EXECUTE: <command>\n"
                 f"SEARCH: <platform> <query> (platforms: youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud)\n"
@@ -1313,6 +1319,9 @@ class ZourniaCLI:
             system_prompt = (
                 f"You are a function-calling tool. Given a user request, output the matching function call.\n"
                 f"Reply with a very short confirmation, then on the next line output the function call.\n"
+                f"CRITICAL: ALWAYS use Chrome as the default browser. For EXECUTE commands that open URLs, ALWAYS include 'com.android.chrome' at the end.\n"
+                f"CRITICAL: When user says 'in chrome', use SEARCH: google <query> to open in Chrome browser.\n"
+                f"CRITICAL: URLs, images, and web content should ALWAYS open in Chrome. NEVER try to open URLs with monkey or am start without specifying com.android.chrome.\n"
                 f"Functions:\n"
                 f"EXECUTE: <command>\n"
                 f"SEARCH: <platform> <query> (platforms: youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud)\n"
