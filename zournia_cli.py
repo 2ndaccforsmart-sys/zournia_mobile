@@ -432,7 +432,6 @@ class ZourniaCLI:
         if _re.match(r'^(open\s+recents|recent\s+apps|switch\s+apps)', p):
             return self.phone_nav("recents")
 
-        # Open app by name — map common names to package names
         app_map = {
             "youtube": "com.google.android.youtube",
             "chrome": "com.android.chrome",
@@ -459,32 +458,32 @@ class ZourniaCLI:
             "messages": "com.google.android.apps.messaging",
         }
 
-        # "open X"
+        # "open X" — open native app if installed, else Chrome
         m = _re.match(r'^(?:open|launch|start|run)\s+(.+)', p)
         if m:
             name = m.group(1).strip().rstrip(" app").strip()
+            name = _re.sub(r'\s+(?:in|on|with)\s+chrome\s*$', '', name).strip()
             if name in app_map:
                 pkg = app_map[name]
-                result = subprocess.run(
-                    ["monkey", "-p", pkg, "1"],
-                    capture_output=True, text=True, timeout=5
-                )
-                if result.returncode == 0:
-                    return f"Opened {name.title()}."
+                try:
+                    res = subprocess.run(
+                        ["pm", "list", "packages"],
+                        capture_output=True, text=True, timeout=3
+                    )
+                    is_installed = f"package:{pkg}" in res.stdout
+                except Exception:
+                    is_installed = False
+                if is_installed:
+                    result = subprocess.run(
+                        ["monkey", "-p", pkg, "1"],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0:
+                        return f"Opened {name.title()}."
 
-            # Not in map — try as package name directly
-            if "." in name:
-                result = subprocess.run(
-                    ["monkey", "-p", name, "1"],
-                    capture_output=True, text=True, timeout=5
-                )
-                if result.returncode == 0:
-                    return f"Opened {name}."
-
-            # Try to open in browser as URL
-            if name.startswith("www.") or "." in name:
-                url = name if name.startswith("http") else f"https://{name}"
-                return self.open_url(url)
+            # Not installed or not in map — search Google in Chrome
+            encoded = name.replace(" ", "+")
+            return self.open_url(f"https://www.google.com/search?q={encoded}")
 
         # "close X"
         m = _re.match(r'^(?:close|kill|stop)\s+(.+)', p)
@@ -492,32 +491,31 @@ class ZourniaCLI:
             target = m.group(1).strip().rstrip(" app").strip()
             return self.terminate_process(target)
 
-        # "search X on Y" or "play X on Y" or "look up X on Y"
+        # "search/play/find/watch/listen X on Y" — always Chrome
         m = _re.match(r'^(?:search|play|look\s+up|find|watch|listen\s+to)\s+(.+?)\s+on\s+(.+)', p)
         if m:
             query = m.group(1).strip()
             platform = m.group(2).strip().rstrip(".")
             return self.search_media(f"{platform} {query}")
 
-        # "search X" or "play X" — default to YouTube
+        # "search/play X" — default to Google in Chrome
         m = _re.match(r'^(?:search|play|look\s+up|find|watch|listen\s+to)\s+(.+)', p)
         if m:
             query = m.group(1).strip()
-            return self.search_media(f"youtube {query}")
+            encoded = query.replace(" ", "+")
+            return self.open_url(f"https://www.google.com/search?q={encoded}")
 
-        # "open youtube and search X" or "youtube search X"
+        # "youtube search X" or "youtube X"
         m = _re.match(r'(?:open\s+)?youtube\s+(?:and\s+)?(?:search|look\s+up|find)\s+(.+)', p)
         if m:
             return self.search_media(f"youtube {m.group(1).strip()}")
 
-        # Direct URL
-        if _re.match(r'https?://', p):
-            return self.open_url(p)
+        # Direct URL — only if it clearly starts with http or www
+        if _re.match(r'(?:https?://|www\.)', p):
+            url = p if p.startswith("http") else f"https://{p}"
+            return self.open_url(url)
 
-        # "tap on X" / "click X" — needs DUMPUI first, can't do locally
-        # "swipe up/down" etc — needs screen dimensions, can't do locally
-
-        return None  # Not handled locally
+        return None
 
     def open_url(self, url: str) -> str:
         """Try every possible method to open a URL in the default browser."""
@@ -1033,7 +1031,8 @@ class ZourniaCLI:
         return f"DUMPUI ACK: Found {len(elements)} windows.\n{_json.dumps(elements)}"
 
     def search_media(self, query: str) -> str:
-        """Route a search query to the appropriate app or URL.
+        """Route a search query to the appropriate platform.
+        Opens native app if installed, otherwise Chrome browser.
         Format: SEARCH: <platform> <query> or SEARCH: <query> (defaults to YouTube)
         Platforms: youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud"""
         query = query.strip()
@@ -1047,7 +1046,6 @@ class ZourniaCLI:
             search_term = parts[1] if len(parts) > 1 else ""
 
         if not search_term.strip():
-            # No search term — just open the platform homepage
             homepages = {
                 "youtube": "https://www.youtube.com",
                 "spotify": "https://open.spotify.com",
@@ -1067,7 +1065,6 @@ class ZourniaCLI:
                 "app_package": "com.google.android.youtube",
                 "deep_link": f"intent://search?q={encoded}#Intent;package=com.google.android.youtube;end",
                 "web_url": f"https://www.youtube.com/results?search_query={encoded}",
-                "play_url": f"https://www.youtube.com/results?search_query={encoded}&sp=EgIQAQ%3D%3D",
             },
             "spotify": {
                 "app_package": "com.spotify.music",
@@ -1103,32 +1100,26 @@ class ZourniaCLI:
 
         info = deep_links.get(platform, deep_links["google"])
 
-        # Try deep link into the app first
+        # Check if native app is installed
         if "app_package" in info:
             pkg = info["app_package"]
             try:
                 res = subprocess.run(
-                    "pm list packages 2>&1 </dev/null",
-                    shell=True, capture_output=True, text=True, timeout=2
+                    ["pm", "list", "packages"],
+                    capture_output=True, text=True, timeout=3
                 )
-                is_installed = f"package:{pkg}" in res.stdout if res.returncode == 0 else True
+                is_installed = f"package:{pkg}" in res.stdout
             except Exception:
-                is_installed = True
+                is_installed = False
 
             if is_installed:
-                # Try the deep link first
+                # App is installed — open in native app via deep link
                 if "deep_link" in info:
-                    deep_url = info["deep_link"]
-                    result = self.open_url(deep_url)
+                    result = self.open_url(info["deep_link"])
                     if "Failed" not in result:
-                        return f"EXECUTION ACK: Searched '{search_term}' on {platform.title()} and opened in app."
+                        return f"Opened '{search_term}' on {platform.title()}."
 
-                # Fallback: open the web search URL in default browser
-                web_url = info.get("web_url", "")
-                if web_url:
-                    return self.open_url(web_url)
-
-        # No app installed or deep link failed: open web URL
+        # Not installed or no deep link — open web URL in Chrome
         web_url = info.get("web_url", f"https://www.google.com/search?q={encoded}")
         return self.open_url(web_url)
 
