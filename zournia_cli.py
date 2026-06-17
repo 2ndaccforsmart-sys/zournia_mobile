@@ -289,51 +289,82 @@ class ZourniaCLI:
 
     def _extract_commands(self, response: str) -> list:
         """Extract all EXECUTE, CLOSE, SEARCH, TAP, SWIPE, TYPE, NAV, SCREENSHOT, DUMPUI commands from an AI response.
-        Handles plain text, inline code, and markdown code blocks."""
+        Handles plain text, inline code, markdown code blocks, and commands with or without colon."""
         commands = []
+        found_commands = set()
         in_code_block = False
         for line in response.split("\n"):
             raw = line.strip()
-            # Track ``` code fences
             if raw.startswith("```"):
                 in_code_block = not in_code_block
                 continue
-            if in_code_block:
-                check = self._strip_line(line)
-            else:
-                check = self._strip_line(line)
+            check = self._strip_line(line)
+            if not check:
+                continue
+
             if check.startswith("EXECUTE:"):
                 cmd = check.replace("EXECUTE:", "", 1).strip().strip("`").strip()
                 if cmd:
                     commands.append(("EXECUTE", cmd))
+                    found_commands.add("EXECUTE")
             elif check.startswith("CLOSE:"):
                 target = check.replace("CLOSE:", "", 1).strip().strip("`").strip()
                 if target:
                     commands.append(("CLOSE", target))
+                    found_commands.add("CLOSE")
             elif check.startswith("SEARCH:"):
                 query = check.replace("SEARCH:", "", 1).strip().strip("`").strip()
                 if query:
                     commands.append(("SEARCH", query))
+                    found_commands.add("SEARCH")
             elif check.startswith("TAP:"):
                 args = check.replace("TAP:", "", 1).strip().strip("`").strip()
                 if args:
                     commands.append(("TAP", args))
+                    found_commands.add("TAP")
             elif check.startswith("SWIPE:"):
                 args = check.replace("SWIPE:", "", 1).strip().strip("`").strip()
                 if args:
                     commands.append(("SWIPE", args))
+                    found_commands.add("SWIPE")
             elif check.startswith("TYPE:"):
                 text = check.replace("TYPE:", "", 1).strip().strip("`").strip()
                 if text:
                     commands.append(("TYPE", text))
+                    found_commands.add("TYPE")
             elif check.startswith("NAV:"):
                 action = check.replace("NAV:", "", 1).strip().strip("`").strip()
                 if action:
                     commands.append(("NAV", action))
+                    found_commands.add("NAV")
             elif check.startswith("SCREENSHOT:"):
                 commands.append(("SCREENSHOT", ""))
+                found_commands.add("SCREENSHOT")
             elif check.startswith("DUMPUI:"):
                 commands.append(("DUMPUI", ""))
+                found_commands.add("DUMPUI")
+
+        # Fallback: detect commands without colon (e.g. model outputs "DUMPUI" on its own line)
+        if not commands:
+            for line in response.split("\n"):
+                check = self._strip_line(line).upper()
+                if check == "DUMPUI":
+                    commands.append(("DUMPUI", ""))
+                elif check == "SCREENSHOT":
+                    commands.append(("SCREENSHOT", ""))
+                elif check.startswith("EXECUTE ") or check.startswith("EXECUTE\t"):
+                    cmd = self._strip_line(line[len("EXECUTE"):])
+                    if cmd:
+                        commands.append(("EXECUTE", cmd))
+                elif check.startswith("SEARCH ") or check.startswith("SEARCH\t"):
+                    query = self._strip_line(line[len("SEARCH"):])
+                    if query:
+                        commands.append(("SEARCH", query))
+                elif check.startswith("CLOSE ") or check.startswith("CLOSE\t"):
+                    target = self._strip_line(line[len("CLOSE"):])
+                    if target:
+                        commands.append(("CLOSE", target))
+
         return commands
 
     def get_system_info(self):
@@ -1281,6 +1312,10 @@ class ZourniaCLI:
 
                     print(f"{C_GREY}Thinking...{C_RESET}", end="\r")
                     response = self.get_ai_response(prompt, chat_history)
+                    retries = 0
+                    while response is None or (isinstance(response, str) and response.strip() == "") and retries < 2:
+                        retries += 1
+                        response = self.get_ai_response(prompt, chat_history)
                     print(" " * 20, end="\r")
 
                     display_response = self.clean_response(response)
@@ -1500,43 +1535,47 @@ class ZourniaCLI:
                         print(f"{C_CYAN}You > {C_WHITE}{prompt}{C_RESET}")
                         print(f"{C_GREY}Thinking...{C_RESET}", end="\r")
                         response = self.get_ai_response(prompt, chat_history)
+                        retries = 0
+                        while (response is None or (isinstance(response, str) and "empty content" in response.lower())) and retries < 2:
+                            retries += 1
+                            response = self.get_ai_response(prompt, chat_history)
                         print(" " * 20, end="\r")
 
-                        display_response = self.clean_response(response)
-                        print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
+                    display_response = self.clean_response(response)
+                    print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
 
-                        chat_history.append(("user", prompt))
-                        chat_history.append(("assistant", response))
+                    chat_history.append(("user", prompt))
+                    chat_history.append(("assistant", response))
 
-                        if self.chat_mode != "normal":
-                            for kind, payload in self._extract_commands(response):
-                                if kind == "EXECUTE":
-                                    ack = self.execute_terminal_command(payload)
-                                    print(f"{C_GREEN}{ack}{C_RESET}\n")
-                                    chat_history.append(("user", f"Execution confirmation received.\n\n{ack}"))
-                                elif kind == "CLOSE":
-                                    ack = self.terminate_process(payload)
-                                    print(f"{C_GREEN}{ack}{C_RESET}\n")
-                                    chat_history.append(("user", f"Close confirmation received.\n\n{ack}"))
-                                elif kind == "SEARCH":
-                                    ack = self.search_media(payload)
-                                    print(f"{C_GREEN}{ack}{C_RESET}\n")
-                                    chat_history.append(("user", f"Search confirmation received.\n\n{ack}"))
-                                elif kind == "TAP":
-                                    ack = self.phone_tap(payload)
-                                    print(f"{C_GREEN}{ack}{C_RESET}\n")
-                                    chat_history.append(("user", f"Tap confirmation received.\n\n{ack}"))
-                                elif kind == "SWIPE":
-                                    ack = self.phone_swipe(payload)
-                                    print(f"{C_GREEN}{ack}{C_RESET}\n")
-                                    chat_history.append(("user", f"Swipe confirmation received.\n\n{ack}"))
-                                elif kind == "TYPE":
-                                    ack = self.phone_type(payload)
-                                    print(f"{C_GREEN}{ack}{C_RESET}\n")
-                                    chat_history.append(("user", f"Type confirmation received.\n\n{ack}"))
-                                elif kind == "NAV":
-                                    ack = self.phone_nav(payload)
-                                    print(f"{C_GREEN}{ack}{C_RESET}\n")
+                    if self.chat_mode != "normal":
+                        for kind, payload in self._extract_commands(response):
+                            if kind == "EXECUTE":
+                                ack = self.execute_terminal_command(payload)
+                                print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                chat_history.append(("user", f"Execution confirmation received.\n\n{ack}"))
+                            elif kind == "CLOSE":
+                                ack = self.terminate_process(payload)
+                                print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                chat_history.append(("user", f"Close confirmation received.\n\n{ack}"))
+                            elif kind == "SEARCH":
+                                ack = self.search_media(payload)
+                                print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                chat_history.append(("user", f"Search confirmation received.\n\n{ack}"))
+                            elif kind == "TAP":
+                                ack = self.phone_tap(payload)
+                                print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                chat_history.append(("user", f"Tap confirmation received.\n\n{ack}"))
+                            elif kind == "SWIPE":
+                                ack = self.phone_swipe(payload)
+                                print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                chat_history.append(("user", f"Swipe confirmation received.\n\n{ack}"))
+                            elif kind == "TYPE":
+                                ack = self.phone_type(payload)
+                                print(f"{C_GREEN}{ack}{C_RESET}\n")
+                                chat_history.append(("user", f"Type confirmation received.\n\n{ack}"))
+                            elif kind == "NAV":
+                                ack = self.phone_nav(payload)
+                                print(f"{C_GREEN}{ack}{C_RESET}\n")
                                     chat_history.append(("user", f"Nav confirmation received.\n\n{ack}"))
                                 elif kind == "SCREENSHOT":
                                     ack = self.phone_screenshot()
