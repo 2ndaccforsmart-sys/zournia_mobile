@@ -467,10 +467,10 @@ class ZourniaCLI:
                 pkg = app_map[name]
                 try:
                     res = subprocess.run(
-                        ["pm", "list", "packages"],
+                        ["pm", "path", pkg],
                         capture_output=True, text=True, timeout=3
                     )
-                    is_installed = f"package:{pkg}" in res.stdout
+                    is_installed = "package:" in res.stdout and res.returncode == 0
                 except Exception:
                     is_installed = False
                 if is_installed:
@@ -693,20 +693,21 @@ class ZourniaCLI:
             # Check if package is installed on the phone
             is_installed = False
             try:
-                # 1. Try listing packages
-                res = subprocess.run(
-                    "pm list packages 2>&1 </dev/null",
-                    shell=True, capture_output=True, text=True, timeout=2
+                # 1. Try pm path (fast, checks one package)
+                path_res = subprocess.run(
+                    f"pm path {pkg} 2>&1 </dev/null",
+                    shell=True, capture_output=True, text=True, timeout=3
                 )
-                if res.returncode == 0:
-                    is_installed = f"package:{pkg}" in res.stdout
+                if path_res.returncode == 0 and "package:" in path_res.stdout:
+                    is_installed = True
                 else:
-                    # 2. Try pm path fallback
-                    path_res = subprocess.run(
-                        f"pm path {pkg} 2>&1 </dev/null",
-                        shell=True, capture_output=True, text=True, timeout=2
+                    # 2. Try pm list packages as fallback
+                    res = subprocess.run(
+                        "pm list packages 2>&1 </dev/null",
+                        shell=True, capture_output=True, text=True, timeout=3
                     )
-                    is_installed = path_res.returncode == 0 and "package:" in path_res.stdout
+                    if res.returncode == 0:
+                        is_installed = f"package:{pkg}" in res.stdout
             except Exception:
                 is_installed = True
 
@@ -1457,6 +1458,15 @@ class ZourniaCLI:
                         self.handle_chat_command(prompt, chat_history)
                         continue
 
+                    # Try local intent parser FIRST — fast, no AI needed
+                    if self.chat_mode != "normal":
+                        local_ack = self.local_intent_parse(prompt)
+                        if local_ack:
+                            print(f"{C_GREEN}zournia > {C_WHITE}{local_ack}{C_RESET}\n")
+                            chat_history.append(("user", prompt))
+                            chat_history.append(("assistant", local_ack))
+                            continue
+
                     print(f"{C_GREY}Thinking...{C_RESET}", end="\r")
                     response = self.get_ai_response(prompt, chat_history)
                     retries = 0
@@ -1478,13 +1488,6 @@ class ZourniaCLI:
 
                     if self.chat_mode != "normal":
                         commands_found = self._extract_commands(response)
-                        if not commands_found:
-                            local_ack = self.local_intent_parse(prompt)
-                            if local_ack:
-                                print(f"{C_GREEN}zournia > {C_WHITE}{local_ack}{C_RESET}\n")
-                                chat_history.append(("user", prompt))
-                                chat_history.append(("assistant", local_ack))
-                                continue
                         for kind, payload in commands_found:
                             if kind == "EXECUTE":
                                 ack = self.execute_terminal_command(payload)
@@ -1694,6 +1697,17 @@ class ZourniaCLI:
                             self.handle_chat_command(prompt, chat_history)
                             continue
 
+                        # Try local intent parser FIRST — fast, no AI needed
+                        if self.chat_mode != "normal":
+                            local_ack = self.local_intent_parse(prompt)
+                            if local_ack:
+                                print()
+                                print(f"{C_CYAN}You > {C_WHITE}{prompt}{C_RESET}")
+                                print(f"{C_GREEN}zournia > {C_WHITE}{local_ack}{C_RESET}\n")
+                                chat_history.append(("user", prompt))
+                                chat_history.append(("assistant", local_ack))
+                                continue
+
                         # Normal chat response from workspace prompt
                         print()
                         print(f"{C_CYAN}You > {C_WHITE}{prompt}{C_RESET}")
@@ -1718,13 +1732,6 @@ class ZourniaCLI:
 
                     if self.chat_mode != "normal":
                         commands_found = self._extract_commands(response)
-                        if not commands_found:
-                            local_ack = self.local_intent_parse(prompt)
-                            if local_ack:
-                                print(f"{C_GREEN}zournia > {C_WHITE}{local_ack}{C_RESET}\n")
-                                chat_history.append(("user", prompt))
-                                chat_history.append(("assistant", local_ack))
-                                continue
                         for kind, payload in commands_found:
                             if kind == "EXECUTE":
                                 ack = self.execute_terminal_command(payload)
