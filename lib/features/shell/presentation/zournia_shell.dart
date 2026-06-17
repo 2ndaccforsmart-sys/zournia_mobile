@@ -1524,12 +1524,12 @@ class _ZourniaShellState extends State<ZourniaShell> {
 
                     bool isInstalled = false;
                     try {
-                      final pmListRes = await Process.run('sh', ['-c', 'pm list packages 2>&1 </dev/null']);
-                      if (pmListRes.exitCode == 0) {
-                        isInstalled = pmListRes.stdout.toString().contains('package:$pkg');
+                      final pmPathRes = await Process.run('sh', ['-c', 'pm path $pkg 2>&1 </dev/null']);
+                      if (pmPathRes.exitCode == 0 && pmPathRes.stdout.toString().contains('package:')) {
+                        isInstalled = true;
                       } else {
-                        final pmPathRes = await Process.run('sh', ['-c', 'pm path $pkg 2>&1 </dev/null']);
-                        isInstalled = pmPathRes.exitCode == 0 && pmPathRes.stdout.toString().contains('package:');
+                        final pmListRes = await Process.run('sh', ['-c', 'pm list packages 2>&1 </dev/null']);
+                        isInstalled = pmListRes.exitCode == 0 && pmListRes.stdout.toString().contains('package:$pkg');
                       }
                     } catch (_) {
                       isInstalled = true;
@@ -2427,12 +2427,12 @@ class _ZourniaShellState extends State<ZourniaShell> {
       final pkg = info['package']!;
       bool isInstalled = false;
       try {
-        final pmListRes = await Process.run('sh', ['-c', 'pm list packages 2>&1 </dev/null']);
-        if (pmListRes.exitCode == 0) {
-          isInstalled = pmListRes.stdout.toString().contains('package:$pkg');
+        final pmPathRes = await Process.run('sh', ['-c', 'pm path $pkg 2>&1 </dev/null']);
+        if (pmPathRes.exitCode == 0 && pmPathRes.stdout.toString().contains('package:')) {
+          isInstalled = true;
         } else {
-          final pmPathRes = await Process.run('sh', ['-c', 'pm path $pkg 2>&1 </dev/null']);
-          isInstalled = pmPathRes.exitCode == 0 && pmPathRes.stdout.toString().contains('package:');
+          final pmListRes = await Process.run('sh', ['-c', 'pm list packages 2>&1 </dev/null']);
+          isInstalled = pmListRes.exitCode == 0 && pmListRes.stdout.toString().contains('package:$pkg');
         }
       } catch (_) {
         isInstalled = true;

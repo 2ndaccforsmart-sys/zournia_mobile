@@ -467,10 +467,10 @@ class ZourniaCLI:
                 pkg = app_map[name]
                 try:
                     res = subprocess.run(
-                        ["pm", "list", "packages"],
+                        ["pm", "path", pkg],
                         capture_output=True, text=True, timeout=3
                     )
-                    is_installed = f"package:{pkg}" in res.stdout
+                    is_installed = "package:" in res.stdout and res.returncode == 0
                 except Exception:
                     is_installed = False
                 if is_installed:
@@ -1105,10 +1105,10 @@ class ZourniaCLI:
             pkg = info["app_package"]
             try:
                 res = subprocess.run(
-                    ["pm", "list", "packages"],
+                    ["pm", "path", pkg],
                     capture_output=True, text=True, timeout=3
                 )
-                is_installed = f"package:{pkg}" in res.stdout
+                is_installed = "package:" in res.stdout and res.returncode == 0
             except Exception:
                 is_installed = False
 
