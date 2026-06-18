@@ -1,5 +1,5 @@
-name: zournia_pc
-description: "Zournia HUD"
+name: zournia_mobile
+description: "Zournia — AI Phone Controller & Automation Suite"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -22,6 +22,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-
   assets:
-    - assets/  # <--- This tells Flutter to grab EVERYTHING in the folder
+    - assets/

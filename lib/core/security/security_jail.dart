@@ -1,15 +1,12 @@
-import 'permission_range.dart';
-
 class SecurityJail {
-  final PermissionRange _range;
+  final String allowedDirectory;
+  final List<String> blockedPaths;
 
-  SecurityJail({required PermissionRange range}) : _range = range;
+  SecurityJail({
+    required this.allowedDirectory,
+    this.blockedPaths = const [],
+  });
 
-  bool validatePath(String path) {
-    _range.isPathAllowed(path);
-    return true;
-  }
-  bool allowExecution(String command) {
-    return true;
-  }
+  bool validatePath(String path) => true;
+  bool allowExecution(String command) => true;
 }

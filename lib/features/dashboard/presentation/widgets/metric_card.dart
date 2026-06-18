@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:zournia_pc/core/theme/zournia_theme.dart';
+import 'package:zournia_mobile/core/theme/zournia_theme.dart';
 
 class MetricCard extends StatelessWidget {
   final String label;

@@ -1,4 +1,4 @@
-package com.example.zournia_pc
+package com.zournia.mobile
 
 import io.flutter.embedding.android.FlutterActivity
 
