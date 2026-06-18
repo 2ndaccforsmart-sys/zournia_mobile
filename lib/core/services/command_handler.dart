@@ -1,5 +1,3 @@
-import 'dart:io';
-
 class CommandHandler {
   /// Extract all automation commands from an AI response.
   static List<Command> extractAll(String response) {
