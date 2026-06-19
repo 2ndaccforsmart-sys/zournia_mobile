@@ -64,7 +64,7 @@ class _ChatViewState extends State<ChatView> {
           right: 20,
           child: CustomDropdownMenu<String>(
             value: widget.chatMode,
-            items: const ['default', 'normal', 'automation', 'autonomous'],
+            items: const ['default', 'normal', 'autonomous'],
             itemLabel: (v) => v,
             accentColor: Colors.white,
             onChanged: (v) => widget.onChatModeChanged(v!),
