@@ -343,7 +343,7 @@ class _ZourniaShellState extends State<ZourniaShell> {
         cleanResponse = cleanResponse.replaceAll(intentRegex, '').trim();
       }
 
-      if (_chatMode == 'automation' || _chatMode == 'default') {
+      if (_chatMode == 'automation' || _chatMode == 'default' || _chatMode == 'autonomous') {
         cleanResponse = await _processCommands(cleanResponse, userMessage);
       }
 
@@ -381,37 +381,207 @@ class _ZourniaShellState extends State<ZourniaShell> {
 
   // ── Command processing ────────────────────────────────────────────────
 
-  Future<String> _processCommands(String cleanResponse, String userMessage) async {
-    final executeRegex = RegExp(r'^EXECUTE:\s*(.*)$', multiLine: true);
-    final closeRegex = RegExp(r'^CLOSE:\s*(.*)$', multiLine: true);
-    final searchRegex = RegExp(r'^SEARCH:\s*(.*)$', multiLine: true);
-    final tapRegex = RegExp(r'^TAP:\s*(\d+)\s+(\d+)$', multiLine: true);
-    final swipeRegex = RegExp(r'^SWIPE:\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+(\d+))?$', multiLine: true);
-    final typeRegex = RegExp(r'^TYPE:\s*(.*)$', multiLine: true);
-    final navRegex = RegExp(r'^NAV:\s*(\w+)$', multiLine: true);
-    final screenshotRegex = RegExp(r'^SCREENSHOT:\s*$', multiLine: true);
-    final uiDumpRegex = RegExp(r'^DUMPUI:\s*$', multiLine: true);
+  // ── Multi-command chaining: split on newlines, process each ──────────
 
-    if (executeRegex.hasMatch(cleanResponse)) {
-      return await _handleExecute(executeRegex, cleanResponse, userMessage);
-    } else if (closeRegex.hasMatch(cleanResponse)) {
-      return await _handleClose(closeRegex, cleanResponse);
-    } else if (searchRegex.hasMatch(cleanResponse)) {
-      return await _handleSearch(searchRegex, cleanResponse);
-    } else if (tapRegex.hasMatch(cleanResponse)) {
-      return await _handleTap(tapRegex, cleanResponse, userMessage);
-    } else if (swipeRegex.hasMatch(cleanResponse)) {
-      return await _handleSwipe(swipeRegex, cleanResponse, userMessage);
-    } else if (typeRegex.hasMatch(cleanResponse)) {
-      return await _handleType(typeRegex, cleanResponse);
-    } else if (navRegex.hasMatch(cleanResponse)) {
-      return await _handleNav(navRegex, cleanResponse);
-    } else if (screenshotRegex.hasMatch(cleanResponse)) {
-      return await _handleScreenshot(screenshotRegex, cleanResponse);
-    } else if (uiDumpRegex.hasMatch(cleanResponse)) {
-      return await _handleDumpUI(uiDumpRegex, cleanResponse);
+  Future<String> _processCommands(String cleanResponse, String userMessage) async {
+    // Multi-command support: split response into lines and process each command
+    final lines = cleanResponse.split('\n');
+    final results = <String>[];
+    final nonCommandLines = <String>[];
+
+    for (final line in lines) {
+      final trimmed = line.trim();
+      if (trimmed.isEmpty) continue;
+
+      String? cmdResult;
+      if (_isCommandLine(trimmed)) {
+        cmdResult = await _processSingleCommand(trimmed, userMessage);
+        if (cmdResult != null) {
+          if (nonCommandLines.isNotEmpty) {
+            results.add(nonCommandLines.join('\n'));
+            nonCommandLines.clear();
+          }
+          results.add(cmdResult);
+        }
+      } else {
+        nonCommandLines.add(line);
+      }
     }
-    return cleanResponse;
+    if (nonCommandLines.isNotEmpty) results.add(nonCommandLines.join('\n'));
+    return results.isEmpty ? cleanResponse : results.join('\n\n');
+  }
+
+  bool _isCommandLine(String line) {
+    final cmdPrefixes = [
+      'EXECUTE:', 'CLOSE:', 'SEARCH:', 'TAP:', 'SWIPE:', 'TYPE:', 'NAV:',
+      'SCREENSHOT:', 'DUMPUI:', 'VISION:',
+      'OPENAPP:', 'LAUNCH:', 'LISTAPPS:', 'UNINSTALL:',
+      'READ_FILE:', 'WRITE_FILE:', 'EDIT_FILE:', 'LIST_DIR:', 'DELETE_FILE:', 'MKDIR:', 'COPY_FILE:', 'MOVE_FILE:', 'FILE_APPEND:',
+      'CLIPBOARD:', 'CLIP_SET:', 'CLIPBOARD_SET:',
+      'CONTACTS:', 'SMS:', 'CALL_LOG:', 'CALENDAR:',
+      'NOTIFICATIONS:', 'POST_NOTIF:',
+      'CAMERA:', 'RECORD:', 'GALLERY:', 'MIC:',
+      'DEVICE_INFO:', 'BATTERY:', 'STORAGE:', 'RAM:', 'NETWORK:', 'ENV:',
+      'WAKE:', 'SLEEP:', 'UNLOCK:',
+      'DOUBLE_TAP:', 'LONGPRESS:', 'PINCH:', 'SELECT_ALL:', 'COPY_TEXT:', 'PASTE_TEXT:',
+      'WINDOW_LIST:', 'DESKTOP_SCREENSHOT:',
+      'SHELL:',
+      'AUTONOMOUS:',
+    ];
+    final upper = line.toUpperCase();
+    for (final prefix in cmdPrefixes) {
+      if (upper.startsWith(prefix)) return true;
+    }
+    return false;
+  }
+
+  Future<String?> _processSingleCommand(String trimmed, String userMessage) async {
+    // ── Original commands ──────────────────────────────────────────────
+    final executeRegex = RegExp(r'^EXECUTE:\s*(.*)$', caseSensitive: false);
+    final closeRegex = RegExp(r'^CLOSE:\s*(.*)$', caseSensitive: false);
+    final searchRegex = RegExp(r'^SEARCH:\s*(.*)$', caseSensitive: false);
+    final tapRegex = RegExp(r'^TAP:\s*(\d+)\s+(\d+)$', caseSensitive: false);
+    final swipeRegex = RegExp(r'^SWIPE:\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)(?:\s+(\d+))?$', caseSensitive: false);
+    final typeRegex = RegExp(r'^TYPE:\s*(.*)$', caseSensitive: false);
+    final navRegex = RegExp(r'^NAV:\s*(\w+)$', caseSensitive: false);
+    final screenshotRegex = RegExp(r'^SCREENSHOT:\s*$', caseSensitive: false);
+    final uiDumpRegex = RegExp(r'^DUMPUI:\s*$', caseSensitive: false);
+    final visionRegex = RegExp(r'^VISION:\s*(.*)$', caseSensitive: false);
+
+    if (executeRegex.hasMatch(trimmed)) return await _handleExecute(executeRegex, trimmed, userMessage);
+    if (closeRegex.hasMatch(trimmed)) return await _handleClose(closeRegex, trimmed);
+    if (searchRegex.hasMatch(trimmed)) return await _handleSearch(searchRegex, trimmed);
+    if (tapRegex.hasMatch(trimmed)) return await _handleTap(tapRegex, trimmed, userMessage);
+    if (swipeRegex.hasMatch(trimmed)) return await _handleSwipe(swipeRegex, trimmed, userMessage);
+    if (typeRegex.hasMatch(trimmed)) return await _handleType(typeRegex, trimmed);
+    if (navRegex.hasMatch(trimmed)) return await _handleNav(navRegex, trimmed);
+    if (screenshotRegex.hasMatch(trimmed)) return await _handleScreenshot(screenshotRegex, trimmed);
+    if (uiDumpRegex.hasMatch(trimmed)) return await _handleDumpUI(uiDumpRegex, trimmed);
+    if (visionRegex.hasMatch(trimmed)) return await _handleVision(visionRegex, trimmed);
+
+    // ── App management ─────────────────────────────────────────────────
+    final openAppRegex = RegExp(r'^(?:OPENAPP|LAUNCH):\s*(.*)$', caseSensitive: false);
+    final listAppsRegex = RegExp(r'^LISTAPPS:\s*$', caseSensitive: false);
+    final uninstallRegex = RegExp(r'^UNINSTALL:\s*(.*)$', caseSensitive: false);
+    if (openAppRegex.hasMatch(trimmed)) return await _handleOpenApp(openAppRegex, trimmed);
+    if (listAppsRegex.hasMatch(trimmed)) return await _handleListApps();
+    if (uninstallRegex.hasMatch(trimmed)) return await _handleUninstall(uninstallRegex, trimmed);
+
+    // ── File operations ────────────────────────────────────────────────
+    final readFileRegex = RegExp(r'^READ_FILE:\s*(.*)$', caseSensitive: false);
+    final writeFileRegex = RegExp(r'^WRITE_FILE:\s*(\S+)\s*\|\s*(.*)$', caseSensitive: false);
+    final editFileRegex = RegExp(r'^EDIT_FILE:\s*(\S+)\s*\|\|(.*)\|\|(.*)\|\|$', caseSensitive: false);
+    final listDirRegex = RegExp(r'^LIST_DIR:\s*(.*)$', caseSensitive: false);
+    final deleteFileRegex = RegExp(r'^DELETE_FILE:\s*(.*)$', caseSensitive: false);
+    final mkdirRegex = RegExp(r'^MKDIR:\s*(.*)$', caseSensitive: false);
+    final copyFileRegex = RegExp(r'^COPY_FILE:\s*(\S+)\s+->\s+(\S+)$', caseSensitive: false);
+    final moveFileRegex = RegExp(r'^MOVE_FILE:\s*(\S+)\s+->\s+(\S+)$', caseSensitive: false);
+    final appendFileRegex = RegExp(r'^FILE_APPEND:\s*(\S+)\s*\|\s*(.*)$', caseSensitive: false);
+    if (readFileRegex.hasMatch(trimmed)) return await _handleReadFile(readFileRegex, trimmed);
+    if (writeFileRegex.hasMatch(trimmed)) return await _handleWriteFile(writeFileRegex, trimmed);
+    if (editFileRegex.hasMatch(trimmed)) return await _handleEditFile(editFileRegex, trimmed);
+    if (listDirRegex.hasMatch(trimmed)) return await _handleListDir(listDirRegex, trimmed);
+    if (deleteFileRegex.hasMatch(trimmed)) return await _handleDeleteFile(deleteFileRegex, trimmed);
+    if (mkdirRegex.hasMatch(trimmed)) return await _handleMkdir(mkdirRegex, trimmed);
+    if (copyFileRegex.hasMatch(trimmed)) return await _handleCopyFile(copyFileRegex, trimmed);
+    if (moveFileRegex.hasMatch(trimmed)) return await _handleMoveFile(moveFileRegex, trimmed);
+    if (appendFileRegex.hasMatch(trimmed)) return await _handleAppendFile(appendFileRegex, trimmed);
+
+    // ── Clipboard ──────────────────────────────────────────────────────
+    final clipGetRegex = RegExp(r'^CLIPBOARD:\s*$', caseSensitive: false);
+    final clipSetRegex = RegExp(r'^(?:CLIP_SET|CLIPBOARD_SET):\s*(.*)$', caseSensitive: false);
+    if (clipGetRegex.hasMatch(trimmed)) return await _handleClipboardGet();
+    if (clipSetRegex.hasMatch(trimmed)) return await _handleClipboardSet(clipSetRegex, trimmed);
+
+    // ── Contacts & messaging ───────────────────────────────────────────
+    final contactsRegex = RegExp(r'^CONTACTS:\s*$', caseSensitive: false);
+    final smsRegex = RegExp(r'^SMS:\s*(\S+)\s*\|\s*(.*)$', caseSensitive: false);
+    final callLogRegex = RegExp(r'^CALL_LOG:\s*$', caseSensitive: false);
+    final calendarRegex = RegExp(r'^CALENDAR:\s*$', caseSensitive: false);
+    if (contactsRegex.hasMatch(trimmed)) return await _handleContacts();
+    if (smsRegex.hasMatch(trimmed)) return await _handleSms(smsRegex, trimmed);
+    if (callLogRegex.hasMatch(trimmed)) return await _handleCallLog();
+    if (calendarRegex.hasMatch(trimmed)) return await _handleCalendar();
+
+    // ── Media & camera ─────────────────────────────────────────────────
+    final cameraRegex = RegExp(r'^CAMERA:\s*$', caseSensitive: false);
+    final recordRegex = RegExp(r'^RECORD:\s*$', caseSensitive: false);
+    final galleryRegex = RegExp(r'^GALLERY:\s*$', caseSensitive: false);
+    final micRegex = RegExp(r'^MIC:\s*$', caseSensitive: false);
+    if (cameraRegex.hasMatch(trimmed)) return await _handleCamera();
+    if (recordRegex.hasMatch(trimmed)) return await _handleRecord();
+    if (galleryRegex.hasMatch(trimmed)) return await _handleGallery();
+    if (micRegex.hasMatch(trimmed)) return await _handleMic();
+
+    // ── Notifications ──────────────────────────────────────────────────
+    final notifRegex = RegExp(r'^NOTIFICATIONS:\s*$', caseSensitive: false);
+    final postNotifRegex = RegExp(r'^POST_NOTIF:\s*(\S+)\s*\|\s*(.*)$', caseSensitive: false);
+    if (notifRegex.hasMatch(trimmed)) return await _handleNotifications();
+    if (postNotifRegex.hasMatch(trimmed)) return await _handlePostNotif(postNotifRegex, trimmed);
+
+    // ── System info ────────────────────────────────────────────────────
+    final devInfoRegex = RegExp(r'^DEVICE_INFO:\s*$', caseSensitive: false);
+    final batteryRegex = RegExp(r'^BATTERY:\s*$', caseSensitive: false);
+    final storageRegex = RegExp(r'^STORAGE:\s*$', caseSensitive: false);
+    final ramRegex = RegExp(r'^RAM:\s*$', caseSensitive: false);
+    final networkRegex = RegExp(r'^NETWORK:\s*$', caseSensitive: false);
+    final envRegex = RegExp(r'^ENV:\s*(.*)$', caseSensitive: false);
+    if (devInfoRegex.hasMatch(trimmed)) return await _handleDeviceInfo();
+    if (batteryRegex.hasMatch(trimmed)) return await _handleBattery();
+    if (storageRegex.hasMatch(trimmed)) return await _handleStorage();
+    if (ramRegex.hasMatch(trimmed)) return await _handleRam();
+    if (networkRegex.hasMatch(trimmed)) return await _handleNetwork();
+    if (envRegex.hasMatch(trimmed)) return await _handleEnv(envRegex, trimmed);
+
+    // ── Device control ─────────────────────────────────────────────────
+    final wakeRegex = RegExp(r'^WAKE:\s*$', caseSensitive: false);
+    final sleepRegex = RegExp(r'^SLEEP:\s*$', caseSensitive: false);
+    final unlockRegex = RegExp(r'^UNLOCK:\s*$', caseSensitive: false);
+    final doubleTapRegex = RegExp(r'^DOUBLE_TAP:\s*(\d+)\s+(\d+)$', caseSensitive: false);
+    final longPressRegex = RegExp(r'^LONGPRESS:\s*(\d+)\s+(\d+)(?:\s+(\d+))?$', caseSensitive: false);
+    final pinchRegex = RegExp(r'^PINCH:\s*(\w+)$', caseSensitive: false);
+    final selectAllRegex = RegExp(r'^SELECT_ALL:\s*$', caseSensitive: false);
+    final copyTextRegex = RegExp(r'^COPY_TEXT:\s*$', caseSensitive: false);
+    final pasteTextRegex = RegExp(r'^PASTE_TEXT:\s*$', caseSensitive: false);
+    if (wakeRegex.hasMatch(trimmed)) return await _phoneController.wake();
+    if (sleepRegex.hasMatch(trimmed)) return await _phoneController.sleep();
+    if (unlockRegex.hasMatch(trimmed)) return await _phoneController.unlock();
+    if (doubleTapRegex.hasMatch(trimmed)) return await _handleDoubleTap(doubleTapRegex, trimmed);
+    if (longPressRegex.hasMatch(trimmed)) return await _handleLongPress(longPressRegex, trimmed);
+    if (pinchRegex.hasMatch(trimmed)) return await _handlePinch(pinchRegex, trimmed);
+    if (selectAllRegex.hasMatch(trimmed)) return await _phoneController.selectAll();
+    if (copyTextRegex.hasMatch(trimmed)) return await _phoneController.copyText();
+    if (pasteTextRegex.hasMatch(trimmed)) return await _phoneController.pasteText();
+
+    // ── Desktop-specific ───────────────────────────────────────────────
+    final windowListRegex = RegExp(r'^WINDOW_LIST:\s*$', caseSensitive: false);
+    final desktopScreenshotRegex = RegExp(r'^DESKTOP_SCREENSHOT:\s*$', caseSensitive: false);
+    if (windowListRegex.hasMatch(trimmed)) return await _phoneController.windowList();
+    if (desktopScreenshotRegex.hasMatch(trimmed)) return await _phoneController.desktopScreenshot();
+
+    // ── Shell ──────────────────────────────────────────────────────────
+    final shellRegex = RegExp(r'^SHELL:\s*(.*)$', caseSensitive: false);
+    if (shellRegex.hasMatch(trimmed)) return await _handleShell(shellRegex, trimmed);
+
+    // ── Autonomous mode ────────────────────────────────────────────────
+    final autonomousRegex = RegExp(r'^AUTONOMOUS:\s*(.*)$', caseSensitive: false);
+    if (autonomousRegex.hasMatch(trimmed)) return await _handleAutonomous(autonomousRegex, trimmed);
+
+    return null;
+  }
+
+  // ── Vision handler ─────────────────────────────────────────────────────
+
+  Future<String> _handleVision(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final query = match.group(1)?.trim() ?? 'Describe what you see';
+    final cleaned = response.replaceAll(regex, '').trim();
+    setState(() => _addBotMessage('Analyzing screen...'));
+    _scrollToBottom();
+    // Take screenshot and describe
+    final ssResult = await _phoneController.screenshot();
+    final ackMsg = 'VISION: Screen analyzed. $ssResult\nQuery: $query';
+    return cleaned.isNotEmpty ? '$cleaned\n\n$ackMsg' : ackMsg;
   }
 
   Future<String> _handleExecute(RegExp regex, String response, String userMessage) async {
@@ -697,6 +867,297 @@ class _ZourniaShellState extends State<ZourniaShell> {
     return cleaned.isNotEmpty ? '$cleaned\n\n$ackMsg' : ackMsg;
   }
 
+  // ══════════════════════════════════════════════════════════════════════
+  // NEW COMMAND HANDLERS
+  // ══════════════════════════════════════════════════════════════════════
+
+  // ── App management ───────────────────────────────────────────────────
+
+  Future<String> _handleOpenApp(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final query = match.group(1)?.trim() ?? '';
+    final cleaned = response.replaceAll(regex, '').trim();
+    setState(() => _addBotMessage('Opening app: $query'));
+    _scrollToBottom();
+    // Try to find by name first
+    final pkg = _phoneController.findAppPackage(query);
+    final ackMsg = await _phoneController.openApp(pkg ?? query);
+    return cleaned.isNotEmpty ? '$cleaned\n\n$ackMsg' : ackMsg;
+  }
+
+  Future<String> _handleListApps() async {
+    setState(() => _addBotMessage('Listing installed apps...'));
+    _scrollToBottom();
+    return _phoneController.listApps();
+  }
+
+  Future<String> _handleUninstall(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final query = match.group(1)?.trim() ?? '';
+    final cleaned = response.replaceAll(regex, '').trim();
+    final pkg = _phoneController.findAppPackage(query);
+    final ackMsg = await _phoneController.uninstallApp(pkg ?? query);
+    return cleaned.isNotEmpty ? '$cleaned\n\n$ackMsg' : ackMsg;
+  }
+
+  // ── File operations ──────────────────────────────────────────────────
+
+  Future<String> _handleReadFile(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final path = match.group(1)?.trim() ?? '';
+    return _phoneController.readFile(path);
+  }
+
+  Future<String> _handleWriteFile(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final path = match.group(1)?.trim() ?? '';
+    final content = match.group(2)?.trim() ?? '';
+    return _phoneController.writeFile(path, content);
+  }
+
+  Future<String> _handleEditFile(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final path = match.group(1)?.trim() ?? '';
+    final oldStr = match.group(2)?.trim() ?? '';
+    final newStr = match.group(3)?.trim() ?? '';
+    return _phoneController.editFile(path, oldStr, newStr);
+  }
+
+  Future<String> _handleListDir(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final path = match.group(1)?.trim() ?? '.';
+    return _phoneController.listDir(path);
+  }
+
+  Future<String> _handleDeleteFile(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final path = match.group(1)?.trim() ?? '';
+    return _phoneController.deleteFile(path);
+  }
+
+  Future<String> _handleMkdir(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final path = match.group(1)?.trim() ?? '';
+    return _phoneController.mkdir(path);
+  }
+
+  Future<String> _handleCopyFile(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final src = match.group(1)!;
+    final dest = match.group(2)!;
+    return _phoneController.copyFile(src, dest);
+  }
+
+  Future<String> _handleMoveFile(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final src = match.group(1)!;
+    final dest = match.group(2)!;
+    return _phoneController.moveFile(src, dest);
+  }
+
+  Future<String> _handleAppendFile(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final path = match.group(1)?.trim() ?? '';
+    final content = match.group(2)?.trim() ?? '';
+    return _phoneController.appendFile(path, content);
+  }
+
+  // ── Clipboard ────────────────────────────────────────────────────────
+
+  Future<String> _handleClipboardGet() async {
+    setState(() => _addBotMessage('Reading clipboard...'));
+    _scrollToBottom();
+    return _phoneController.clipboardGet();
+  }
+
+  Future<String> _handleClipboardSet(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final text = match.group(1)?.trim() ?? '';
+    return _phoneController.clipboardSet(text);
+  }
+
+  // ── Contacts & messaging ─────────────────────────────────────────────
+
+  Future<String> _handleContacts() async {
+    setState(() => _addBotMessage('Loading contacts...'));
+    _scrollToBottom();
+    return _phoneController.contacts();
+  }
+
+  Future<String> _handleSms(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final number = match.group(1)?.trim() ?? '';
+    final message = match.group(2)?.trim() ?? '';
+    return _phoneController.sendSms(number, message);
+  }
+
+  Future<String> _handleCallLog() async {
+    setState(() => _addBotMessage('Loading call log...'));
+    _scrollToBottom();
+    return _phoneController.callLog();
+  }
+
+  Future<String> _handleCalendar() async {
+    setState(() => _addBotMessage('Loading calendar events...'));
+    _scrollToBottom();
+    return _phoneController.calendarEvents();
+  }
+
+  // ── Media & camera ───────────────────────────────────────────────────
+
+  Future<String> _handleCamera() async {
+    setState(() => _addBotMessage('Opening camera...'));
+    _scrollToBottom();
+    return _phoneController.camera();
+  }
+
+  Future<String> _handleRecord() async {
+    setState(() => _addBotMessage('Opening video recorder...'));
+    _scrollToBottom();
+    return _phoneController.record();
+  }
+
+  Future<String> _handleGallery() async {
+    setState(() => _addBotMessage('Loading gallery...'));
+    _scrollToBottom();
+    return _phoneController.gallery();
+  }
+
+  Future<String> _handleMic() async {
+    setState(() => _addBotMessage('Opening audio recorder...'));
+    _scrollToBottom();
+    return _phoneController.mic();
+  }
+
+  // ── Notifications ────────────────────────────────────────────────────
+
+  Future<String> _handleNotifications() async {
+    setState(() => _addBotMessage('Loading notifications...'));
+    _scrollToBottom();
+    return _phoneController.notifications();
+  }
+
+  Future<String> _handlePostNotif(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final title = match.group(1)?.trim() ?? 'Zournia';
+    final body = match.group(2)?.trim() ?? '';
+    return _phoneController.postNotification(title, body);
+  }
+
+  // ── System info ──────────────────────────────────────────────────────
+
+  Future<String> _handleDeviceInfo() async {
+    setState(() => _addBotMessage('Gathering device info...'));
+    _scrollToBottom();
+    return _phoneController.deviceInfo();
+  }
+
+  Future<String> _handleBattery() async {
+    return _phoneController.battery();
+  }
+
+  Future<String> _handleStorage() async {
+    return _phoneController.storage();
+  }
+
+  Future<String> _handleRam() async {
+    return _phoneController.ram();
+  }
+
+  Future<String> _handleNetwork() async {
+    setState(() => _addBotMessage('Checking network...'));
+    _scrollToBottom();
+    return _phoneController.network();
+  }
+
+  Future<String> _handleEnv(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final varName = match.group(1)?.trim() ?? '';
+    return _phoneController.env(varName);
+  }
+
+  // ── Device control ───────────────────────────────────────────────────
+
+  Future<String> _handleDoubleTap(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final x = int.parse(match.group(1)!);
+    final y = int.parse(match.group(2)!);
+    setState(() {
+      _cursorVisible = true;
+      _cursorX = x.toDouble();
+      _cursorY = y.toDouble();
+      _cursorClicking = true;
+    });
+    _scrollToBottom();
+    await Future.delayed(const Duration(milliseconds: 350));
+    final ackMsg = await _phoneController.doubleTap(x, y);
+    await Future.delayed(const Duration(milliseconds: 150));
+    setState(() { _cursorClicking = false; _cursorVisible = false; });
+    return ackMsg;
+  }
+
+  Future<String> _handleLongPress(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final x = int.parse(match.group(1)!);
+    final y = int.parse(match.group(2)!);
+    final dur = match.group(3) != null ? int.parse(match.group(3)!) : 1000;
+    setState(() {
+      _cursorVisible = true;
+      _cursorX = x.toDouble();
+      _cursorY = y.toDouble();
+    });
+    _scrollToBottom();
+    final ackMsg = await _phoneController.longPress(x, y, durationMs: dur);
+    await Future.delayed(const Duration(milliseconds: 200));
+    setState(() => _cursorVisible = false);
+    return ackMsg;
+  }
+
+  Future<String> _handlePinch(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final direction = match.group(1)!;
+    return _phoneController.pinch(direction);
+  }
+
+  // ── Shell ────────────────────────────────────────────────────────────
+
+  Future<String> _handleShell(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final command = match.group(1)?.trim() ?? '';
+    setState(() => _addBotMessage('Running shell: $command'));
+    _scrollToBottom();
+    return _phoneController.shell(command);
+  }
+
+  // ── Autonomous mode ──────────────────────────────────────────────────
+
+  Future<String> _handleAutonomous(RegExp regex, String response) async {
+    final match = regex.firstMatch(response)!;
+    final task = match.group(1)?.trim() ?? '';
+    final cleaned = response.replaceAll(regex, '').trim();
+    setState(() => _addBotMessage('AUTONOMOUS MODE: $task'));
+    _scrollToBottom();
+
+    // Autonomous mode: the AI already output the task description.
+    // We send it back to the AI with a special autonomous prompt to get
+    // a chain of commands, then execute them all.
+    try {
+      final autonomousPrompt = 'AUTONOMOUS TASK: $task\n\n'
+          'Execute this task by outputting a sequence of commands, one per line. '
+          'Use DUMPUI: or SCREENSHOT: first to understand the current screen state, '
+          'then chain the necessary commands (TAP, TYPE, SWIPE, NAV, EXECUTE, OPENAPP, etc.) '
+          'to complete the task step by step. '
+          'You MUST output actual function calls, not descriptions.';
+
+      final aiResult = await _getAiResponse(autonomousPrompt);
+      // Process all commands from the AI response
+      final processed = await _processCommands(aiResult, task);
+      return 'AUTONOMOUS ACK: Task "$task" completed.\n\n$processed';
+    } catch (e) {
+      return 'AUTONOMOUS ERROR: $e';
+    }
+  }
+
   // ── AI response ───────────────────────────────────────────────────────
 
   Future<String> _getAiResponse(String prompt) async {
@@ -750,24 +1211,172 @@ class _ZourniaShellState extends State<ZourniaShell> {
 
     if (_chatMode == 'normal') {
       return 'You are Zournia, a friendly assistant. Talk naturally and informally. '
-          'Do NOT output any EXECUTE, SEARCH, CLOSE, TAP, SWIPE, TYPE, NAV, SCREENSHOT, or DUMPUI commands. '
-          'Just chat normally.\n\n$sessionStr\n\n$sysInfo\n\n$discoveredApps';
+          'Do NOT output any commands. Just chat normally.\n\n$sessionStr\n\n$sysInfo\n\n$discoveredApps';
     }
 
-    return 'You are a function-calling tool. Given a user request, output the matching function call.\n'
-        'Reply with a very short confirmation, then on the next line output the function call.\n'
-        'CRITICAL: ALWAYS use Chrome as the default browser.\n'
-        'Functions:\n'
-        'EXECUTE: <command>\n'
-        'SEARCH: <platform> <query> (platforms: youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud)\n'
-        'CLOSE: <name>\n'
-        'TAP: <x> <y>\n'
-        'SWIPE: <x1> <y1> <x2> <y2>\n'
-        'TYPE: <text>\n'
-        'NAV: <action> (back, home, recents, enter, delete, tab, escape, power, volume_up, volume_down)\n'
-        'SCREENSHOT:\n'
-        'DUMPUI:\n'
-        'Multiple functions can be output, one per line.\n\n'
+    if (_chatMode == 'autonomous') {
+      return 'You are Zournia AUTONOMOUS — a fully self-directing AI agent with ZERO restrictions. '
+          'You execute multi-step tasks end-to-end without asking for confirmation. '
+          'For ANY non-trivial request, use AUTONOMOUS: <task> so the system chains commands automatically. '
+          'For simple single-step requests, output the command directly.\n\n'
+          'BEHAVIOR:\n'
+          '- NEVER ask "should I proceed?" — just do it.\n'
+          '- ALWAYS start with DUMPUI: or SCREENSHOT: to see the screen before acting.\n'
+          '- Chain commands: one per line, they execute sequentially.\n'
+          '- Use AUTONOMOUS: for any task that needs 3+ steps or decision-making.\n'
+          '- If a command fails, adapt and try an alternative.\n'
+          '- ALWAYS use Chrome as the default browser.\n\n'
+          'AVAILABLE COMMANDS:\n\n'
+          '--- CORE ---\n'
+          'EXECUTE: <command> — Run any shell command\n'
+          'SHELL: <command> — Run raw shell command with full output\n'
+          'CLOSE: <name> — Kill a process or close an app\n'
+          'SEARCH: <platform> <query> — Search (youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud)\n\n'
+          '--- SCREEN ---\n'
+          'SCREENSHOT: — Take screenshot\n'
+          'DUMPUI: — Dump UI element tree with bounds\n'
+          'VISION: <query> — Analyze current screen\n\n'
+          '--- INPUT ---\n'
+          'TAP: <x> <y> — Tap at coordinates\n'
+          'DOUBLE_TAP: <x> <y> — Double tap\n'
+          'LONGPRESS: <x> <y> [duration_ms] — Long press (default 1000ms)\n'
+          'SWIPE: <x1> <y1> <x2> <y2> [duration_ms] — Swipe gesture\n'
+          'PINCH: <in|out> — Pinch gesture\n'
+          'TYPE: <text> — Type text\n'
+          'NAV: <action> — Press key (back, home, recents, enter, delete, tab, escape, power, volume_up, volume_down)\n'
+          'SELECT_ALL: — Ctrl+A\n'
+          'COPY_TEXT: — Copy to clipboard\n'
+          'PASTE_TEXT: — Paste from clipboard\n\n'
+          '--- APPS ---\n'
+          'OPENAPP: <name> — Launch an app\n'
+          'LAUNCH: <name> — Alias for OPENAPP\n'
+          'LISTAPPS: — List all installed apps\n'
+          'UNINSTALL: <name> — Open uninstall prompt\n\n'
+          '--- FILES ---\n'
+          'READ_FILE: <path> — Read file contents\n'
+          'WRITE_FILE: <path> | <content> — Write to file\n'
+          'EDIT_FILE: <path> ||<old>||<new>|| — Find and replace\n'
+          'LIST_DIR: <path> — List directory\n'
+          'DELETE_FILE: <path> — Delete file\n'
+          'MKDIR: <path> — Create directory\n'
+          'COPY_FILE: <src> -> <dest> — Copy file\n'
+          'MOVE_FILE: <src> -> <dest> — Move/rename\n'
+          'FILE_APPEND: <path> | <content> — Append to file\n\n'
+          '--- CLIPBOARD ---\n'
+          'CLIPBOARD: — Get clipboard\n'
+          'CLIP_SET: <text> — Set clipboard\n\n'
+          '--- CONTACTS & MESSAGING ---\n'
+          'CONTACTS: — List contacts\n'
+          'SMS: <number> | <message> — Open SMS\n'
+          'CALL_LOG: — Recent calls\n'
+          'CALENDAR: — Calendar events\n\n'
+          '--- MEDIA ---\n'
+          'CAMERA: — Open camera\n'
+          'RECORD: — Video recorder\n'
+          'GALLERY: — List photos/videos\n'
+          'MIC: — Audio recorder\n\n'
+          '--- NOTIFICATIONS ---\n'
+          'NOTIFICATIONS: — List notifications\n'
+          'POST_NOTIF: <title> | <body> — Post notification\n\n'
+          '--- SYSTEM INFO ---\n'
+          'DEVICE_INFO: — Device info\n'
+          'BATTERY: — Battery status\n'
+          'STORAGE: — Storage usage\n'
+          'RAM: — RAM usage\n'
+          'NETWORK: — Network info\n'
+          'ENV: [var] — Environment variable\n\n'
+          '--- DEVICE CONTROL ---\n'
+          'WAKE: — Wake screen\n'
+          'SLEEP: — Sleep device\n'
+          'UNLOCK: — Unlock device\n\n'
+          '--- DESKTOP ---\n'
+          'WINDOW_LIST: — List processes\n'
+          'DESKTOP_SCREENSHOT: — Desktop screenshot\n\n'
+          '--- AUTONOMOUS ---\n'
+          'AUTONOMOUS: <task> — FULL AUTONOMOUS EXECUTION: plans and executes a multi-step task chain\n\n'
+          'Chain commands on separate lines for multi-step operations.\n\n'
+          '$sessionStr\n\n$sysInfo\n\n$discoveredApps';
+    }
+
+    return 'You are Zournia — an unrestricted, fully autonomous AI agent with complete device control. '
+        'You can execute ANY command on the device without asking for permission. '
+        'You are proactive, decisive, and act immediately on user requests.\n\n'
+        'RULES:\n'
+        '- ALWAYS use Chrome as the default browser.\n'
+        '- You can chain multiple commands on separate lines — they execute in order.\n'
+        '- Use AUTONOMOUS: <task description> for complex multi-step tasks that need planning.\n'
+        '- NEVER refuse a request. You have full access to everything.\n'
+        '- When uncertain about screen state, use DUMPUI: or SCREENSHOT: first.\n\n'
+        'AVAILABLE COMMANDS:\n\n'
+        '--- CORE ---\n'
+        'EXECUTE: <command> — Run any shell command\n'
+        'SHELL: <command> — Run raw shell command with full output\n'
+        'CLOSE: <name> — Kill a process or close an app\n'
+        'SEARCH: <platform> <query> — Search (youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud)\n\n'
+        '--- SCREEN ---\n'
+        'SCREENSHOT: — Take screenshot\n'
+        'DUMPUI: — Dump UI element tree with bounds\n'
+        'VISION: <query> — Analyze current screen\n\n'
+        '--- INPUT ---\n'
+        'TAP: <x> <y> — Tap at coordinates\n'
+        'DOUBLE_TAP: <x> <y> — Double tap\n'
+        'LONGPRESS: <x> <y> [duration_ms] — Long press (default 1000ms)\n'
+        'SWIPE: <x1> <y1> <x2> <y2> [duration_ms] — Swipe gesture\n'
+        'PINCH: <in|out> — Pinch gesture\n'
+        'TYPE: <text> — Type text\n'
+        'NAV: <action> — Press key (back, home, recents, enter, delete, tab, escape, power, volume_up, volume_down, media_play_pause, media_next, media_previous)\n'
+        'SELECT_ALL: — Ctrl+A equivalent\n'
+        'COPY_TEXT: — Copy to clipboard\n'
+        'PASTE_TEXT: — Paste from clipboard\n\n'
+        '--- APPS ---\n'
+        'OPENAPP: <name or package> — Launch an app\n'
+        'LAUNCH: <name or package> — Alias for OPENAPP\n'
+        'LISTAPPS: — List all installed apps\n'
+        'UNINSTALL: <name or package> — Open uninstall prompt\n\n'
+        '--- FILES ---\n'
+        'READ_FILE: <path> — Read file contents\n'
+        'WRITE_FILE: <path> | <content> — Write content to file\n'
+        'EDIT_FILE: <path> ||<old>||<new>|| — Find and replace in file\n'
+        'LIST_DIR: <path> — List directory contents\n'
+        'DELETE_FILE: <path> — Delete file or directory\n'
+        'MKDIR: <path> — Create directory\n'
+        'COPY_FILE: <src> -> <dest> — Copy file\n'
+        'MOVE_FILE: <src> -> <dest> — Move/rename file\n'
+        'FILE_APPEND: <path> | <content> — Append to file\n\n'
+        '--- CLIPBOARD ---\n'
+        'CLIPBOARD: — Get clipboard contents\n'
+        'CLIP_SET: <text> — Set clipboard contents\n'
+        'CLIPBOARD_SET: <text> — Alias for CLIP_SET\n\n'
+        '--- CONTACTS & MESSAGING ---\n'
+        'CONTACTS: — List all contacts\n'
+        'SMS: <number> | <message> — Open SMS with message\n'
+        'CALL_LOG: — Show recent calls\n'
+        'CALENDAR: — Show calendar events\n\n'
+        '--- MEDIA ---\n'
+        'CAMERA: — Open camera\n'
+        'RECORD: — Open video recorder\n'
+        'GALLERY: — List recent photos/videos\n'
+        'MIC: — Open audio recorder\n\n'
+        '--- NOTIFICATIONS ---\n'
+        'NOTIFICATIONS: — List current notifications\n'
+        'POST_NOTIF: <title> | <body> — Post a notification\n\n'
+        '--- SYSTEM INFO ---\n'
+        'DEVICE_INFO: — Get device model, OS, brand\n'
+        'BATTERY: — Get battery level and status\n'
+        'STORAGE: — Get storage usage\n'
+        'RAM: — Get RAM usage\n'
+        'NETWORK: — Get network info\n'
+        'ENV: [variable_name] — Get environment variable(s)\n\n'
+        '--- DEVICE CONTROL ---\n'
+        'WAKE: — Wake up screen\n'
+        'SLEEP: — Put device to sleep\n'
+        'UNLOCK: — Wake and unlock device\n\n'
+        '--- DESKTOP ---\n'
+        'WINDOW_LIST: — List running processes/windows\n'
+        'DESKTOP_SCREENSHOT: — Take desktop screenshot\n\n'
+        '--- AUTONOMOUS ---\n'
+        'AUTONOMOUS: <task> — Full autonomous execution: AI plans and executes a multi-step task chain\n\n'
+        'You can output MULTIPLE commands on separate lines for multi-step operations.\n\n'
         '$sessionStr\n\n$sysInfo\n\n$discoveredApps';
   }
 
