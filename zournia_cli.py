@@ -187,6 +187,7 @@ class ZourniaCLI:
         self.chat_mode = "default"
         self.selected_model = "FreeModel"
         self.process_registry = {}
+        self._pending_ai_instruction = None  # For compound commands (e.g. "open X and do Y")
         self.load_configs()
 
     # ── Config persistence ───────────────────────────────────────────────
@@ -331,7 +332,7 @@ class ZourniaCLI:
             if not check:
                 continue
 
-            for prefix in ("EXECUTE:", "CLOSE:", "SEARCH:", "TAP:", "SWIPE:", "TYPE:", "NAV:", "SCREENSHOT:", "DUMPUI:", "VISION:"):
+            for prefix in ("EXECUTE:", "CLOSE:", "SEARCH:", "TAP:", "SWIPE:", "TYPE:", "NAV:", "SCREENSHOT:", "DUMPUI:", "VISION:", "OPENAPP:", "LAUNCH:"):
                 if check.startswith(prefix):
                     payload = check[len(prefix):].strip().strip("`").strip()
                     kind = prefix.rstrip(":")
@@ -367,7 +368,7 @@ class ZourniaCLI:
         cleaned = []
         for line in response.split("\n"):
             stripped = line.strip().strip("`").strip()
-            if stripped.startswith(("EXECUTE:", "CLOSE:", "SEARCH:", "TAP:", "SWIPE:", "TYPE:", "NAV:", "SCREENSHOT:", "DUMPUI:", "VISION:")):
+            if stripped.startswith(("EXECUTE:", "CLOSE:", "SEARCH:", "TAP:", "SWIPE:", "TYPE:", "NAV:", "SCREENSHOT:", "DUMPUI:", "VISION:", "OPENAPP:", "LAUNCH:")):
                 continue
             if line.strip():
                 cleaned.append(line)
@@ -385,7 +386,12 @@ class ZourniaCLI:
         if re.match(r"^(open\s+recents|recent\s+apps|switch\s+apps)", p):
             return self.phone_nav("recents")
 
-        m = re.match(r"^(?:open|launch|start|run)\s+(.+)", p)
+        # Split at compound connectors to isolate the app name
+        compound_split = re.split(r"\s+(?:and|then|after|now|also)\s+", p, maxsplit=1)
+        app_part = compound_split[0]
+        extra_part = compound_split[1] if len(compound_split) > 1 else None
+
+        m = re.match(r"^(?:open|launch|start|run)\s+(.+)", app_part)
         if m:
             name = m.group(1).strip().rstrip(" app").strip()
             name = re.sub(r"\s+(?:in|on|with)\s+chrome\s*$", "", name).strip()
@@ -393,9 +399,16 @@ class ZourniaCLI:
                 pkg = LOCAL_APP_MAP[name]
                 if _is_package_installed(pkg):
                     _run(["monkey", "-p", pkg, "1"], timeout=5)
+                    if extra_part:
+                        # Compound command: app opened, store remaining for AI
+                        self._pending_ai_instruction = extra_part
+                        return f"Opened {name.title()}. Now: {extra_part}"
                     return f"Opened {name.title()}."
-            encoded = _encode_query(name)
-            return self.open_url(f"https://www.google.com/search?q={encoded}")
+            if not extra_part:
+                encoded = _encode_query(name)
+                return self.open_url(f"https://www.google.com/search?q={encoded}")
+            # If there's extra text and app wasn't found, fall through to AI
+            return None
 
         m = re.match(r"^(?:close|kill|stop)\s+(.+)", p)
         if m:
@@ -500,9 +513,7 @@ class ZourniaCLI:
             result = self._launch_app(pkg)
             if result:
                 return f"EXECUTION ACK: {result}"
-            fallback_url = APP_LAUNCHERS.get(pkg, {}).get("url", f"https://www.google.com/search?q={pkg.split('.')[-1]}")
-            print(f"{C_YELLOW}App '{pkg}' not found on device. Launching fallback in browser...{C_RESET}")
-            return self.open_url(fallback_url)
+            return f"EXECUTION ACK: App '{pkg}' is not installed on this device."
 
         print(f"{C_YELLOW}Executing: {command}{C_RESET}")
         try:
@@ -1003,8 +1014,10 @@ class ZourniaCLI:
             f"You are a function-calling tool. Given a user request, output the matching function call.\n"
             f"Reply with a very short confirmation, then on the next line output the function call.\n"
             f"CRITICAL: ALWAYS use Chrome as the default browser. For EXECUTE commands that open URLs, ALWAYS include 'com.android.chrome' at the end.\n"
+            f"When the user asks to open an app, ALWAYS use OPENAPP: <name> — NEVER output a Google search URL for app launches.\n"
             f"Functions:\n"
             f"EXECUTE: <command>\n"
+            f"OPENAPP: <name> — Launch an installed app (whatsapp, instagram, discord, etc.)\n"
             f"SEARCH: <platform> <query> (platforms: youtube, spotify, netflix, tiktok, google, amazon, twitch, soundcloud)\n"
             f"CLOSE: <name>\n"
             f"TAP: <x> <y>\n"
@@ -1115,6 +1128,22 @@ class ZourniaCLI:
                 print(f"{C_GREEN}zournia > {C_WHITE}{local_ack}{C_RESET}\n")
                 chat_history.append(("user", prompt))
                 chat_history.append(("assistant", local_ack))
+                # Handle compound commands: if there's a pending AI instruction, process it
+                if self._pending_ai_instruction:
+                    pending = self._pending_ai_instruction
+                    self._pending_ai_instruction = None
+                    print(f"{C_GREY}Thinking...{C_RESET}", end="\r")
+                    response = self.get_ai_response(pending, chat_history)
+                    print(" " * 20, end="\r")
+                    display_response = self.clean_response(response)
+                    print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
+                    chat_history.append(("user", pending))
+                    chat_history.append(("assistant", response))
+                    if self.chat_mode != "normal":
+                        for kind, payload in self._extract_commands(response):
+                            ack = self._execute_command(kind, payload)
+                            print(f"{C_GREEN}{ack}{C_RESET}\n")
+                            chat_history.append(("user", f"{kind} confirmation received.\n\n{ack}"))
                 return True
 
         # AI response
@@ -1155,6 +1184,22 @@ class ZourniaCLI:
                 print(f"{C_GREEN}zournia > {C_WHITE}{local_ack}{C_RESET}\n")
                 chat_history.append(("user", prompt))
                 chat_history.append(("assistant", local_ack))
+                # Handle compound commands: if there's a pending AI instruction, process it
+                if self._pending_ai_instruction:
+                    pending = self._pending_ai_instruction
+                    self._pending_ai_instruction = None
+                    print(f"{C_GREY}Thinking...{C_RESET}", end="\r")
+                    response = self.get_ai_response(pending, chat_history)
+                    print(" " * 20, end="\r")
+                    display_response = self.clean_response(response)
+                    print(f"{C_GREEN}zournia > {C_WHITE}{display_response}{C_RESET}\n")
+                    chat_history.append(("user", pending))
+                    chat_history.append(("assistant", response))
+                    if self.chat_mode != "normal":
+                        for kind, payload in self._extract_commands(response):
+                            ack = self._execute_command(kind, payload)
+                            print(f"{C_GREEN}{ack}{C_RESET}\n")
+                            chat_history.append(("user", f"{kind} confirmation received.\n\n{ack}"))
                 return True
 
         # AI response
@@ -1188,8 +1233,25 @@ class ZourniaCLI:
             "SCREENSHOT": lambda _: self.phone_screenshot(),
             "DUMPUI": lambda _: self.phone_dump_ui(),
             "VISION": lambda _: self.phone_screenshot_vision(),
+            "OPENAPP": lambda p: self._openapp_command(p),
+            "LAUNCH": lambda p: self._openapp_command(p),
         }
         return dispatch[kind](payload)
+
+    def _openapp_command(self, name):
+        """Handle OPENAPP/LAUNCH command from AI response."""
+        name = name.strip().lower().rstrip(" app").strip()
+        if name in LOCAL_APP_MAP:
+            pkg = LOCAL_APP_MAP[name]
+            if _is_package_installed(pkg):
+                _run(["monkey", "-p", pkg, "1"], timeout=5)
+                return f"EXECUTION ACK: Opened {name.title()}."
+            return f"EXECUTION ACK: {name.title()} not installed. Use LISTAPPS to see available apps."
+        # Try as package name directly
+        if _is_package_installed(name):
+            _run(["monkey", "-p", name, "1"], timeout=5)
+            return f"EXECUTION ACK: Opened {name}."
+        return f"EXECUTION ACK: Unknown app '{name}'. Use LISTAPPS to see available apps."
 
     def _handle_slash_command(self, prompt, chat_history):
         cmd_parts = prompt.split(maxsplit=1)

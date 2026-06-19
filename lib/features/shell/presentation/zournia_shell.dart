@@ -707,8 +707,7 @@ class _ZourniaShellState extends State<ZourniaShell> {
       }
     }
 
-    final fallbackUrl = 'https://www.google.com/search?q=${pkg.split('.').last}';
-    return _launchUrl(fallbackUrl);
+    return 'EXECUTION ACK: $pkg is not installed on this device.';
   }
 
   Future<String> _handleClose(RegExp regex, String response) async {
