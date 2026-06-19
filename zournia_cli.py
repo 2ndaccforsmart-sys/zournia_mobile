@@ -177,6 +177,28 @@ def _encode_query(q):
     return q.replace(" ", "+").replace("&", "%26").replace("'", "%27")
 
 
+def _input_command(cmd_args, timeout=5):
+    """Run an input command with fallback methods for INJECT_EVENTS permission.
+    Tries: direct input → su -c input → cmd input.
+    Returns (stdout, stderr, returncode)."""
+    # Method 1: Direct input (works on older Android or with ADB enabled)
+    out, err, rc = _run(["input"] + cmd_args, timeout=timeout)
+    if rc == 0:
+        return out, err, rc
+    # Check if it's the INJECT_EVENTS permission error
+    if "INJECT_EVENTS" in err or "SecurityException" in err:
+        # Method 2: Try via su (root)
+        out2, err2, rc2 = _run(["su", "-c", " ".join(["input"] + cmd_args)], timeout=timeout)
+        if rc2 == 0:
+            return out2, err2, rc2
+        # Method 3: Try cmd input (some devices allow this)
+        out3, err3, rc3 = _run(["cmd", "input"] + cmd_args, timeout=timeout)
+        if rc3 == 0:
+            return out3, err3, rc3
+        return out, err, rc  # Return original error
+    return out, err, rc
+
+
 # ── ZourniaCLI ───────────────────────────────────────────────────────────────
 
 class ZourniaCLI:
@@ -551,7 +573,7 @@ class ZourniaCLI:
             return "TAP ERROR: Usage: TAP: <x> <y>"
         try:
             x, y = int(parts[0]), int(parts[1])
-            out, err, rc = _run(["input", "tap", str(x), str(y)], timeout=5)
+            out, err, rc = _input_command(["tap", str(x), str(y)])
             return f"TAP ACK: Tapped at ({x}, {y})." if rc == 0 else f"TAP ERROR: {err}"
         except Exception as e:
             return f"TAP ERROR: {e}"
@@ -563,7 +585,7 @@ class ZourniaCLI:
         try:
             x1, y1, x2, y2 = int(parts[0]), int(parts[1]), int(parts[2]), int(parts[3])
             dur = int(parts[4]) if len(parts) > 4 else 300
-            out, err, rc = _run(["input", "swipe", str(x1), str(y1), str(x2), str(y2), str(dur)], timeout=10)
+            out, err, rc = _input_command(["swipe", str(x1), str(y1), str(x2), str(y2), str(dur)])
             return f"SWIPE ACK: Swiped from ({x1}, {y1}) to ({x2}, {y2}) in {dur}ms." if rc == 0 else f"SWIPE ERROR: {err}"
         except Exception as e:
             return f"SWIPE ERROR: {e}"
@@ -573,7 +595,7 @@ class ZourniaCLI:
             return "TYPE ERROR: Usage: TYPE: <text>"
         try:
             escaped = text.replace(" ", "%s").replace("'", "\\'")
-            out, err, rc = _run(["input", "text", escaped], timeout=5)
+            out, err, rc = _input_command(["text", escaped])
             return f'TYPE ACK: Typed "{text}".' if rc == 0 else f"TYPE ERROR: {err}"
         except Exception as e:
             return f"TYPE ERROR: {e}"
@@ -583,7 +605,7 @@ class ZourniaCLI:
         if not key:
             return f'NAV ERROR: Unknown action "{action}". Available: {", ".join(NAV_KEY_MAP.keys())}'
         try:
-            out, err, rc = _run(["input", "keyevent", key], timeout=5)
+            out, err, rc = _input_command(["keyevent", key])
             return f"NAV ACK: Pressed {action} ({key})." if rc == 0 else f"NAV ERROR: {err}"
         except Exception as e:
             return f"NAV ERROR: {e}"
