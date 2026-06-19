@@ -415,7 +415,9 @@ class ZourniaCLI:
 
         m = re.match(r"^(?:open|launch|start|run)\s+(.+)", app_part)
         if m:
-            name = m.group(1).strip().rstrip(" app").strip()
+            name = m.group(1).strip()
+            if name.endswith(" app"):
+                name = name[:-4].strip()
             name = re.sub(r"\s+(?:in|on|with)\s+chrome\s*$", "", name).strip()
             if name in LOCAL_APP_MAP:
                 pkg = LOCAL_APP_MAP[name]
@@ -434,7 +436,10 @@ class ZourniaCLI:
 
         m = re.match(r"^(?:close|kill|stop)\s+(.+)", p)
         if m:
-            return self.terminate_process(m.group(1).strip().rstrip(" app").strip())
+            target = m.group(1).strip()
+            if target.endswith(" app"):
+                target = target[:-4].strip()
+            return self.terminate_process(target)
 
         m = re.match(r"^(?:search|play|look\s+up|find|watch|listen\s+to)\s+(.+?)\s+on\s+(.+)", p)
         if m:
@@ -1262,7 +1267,9 @@ class ZourniaCLI:
 
     def _openapp_command(self, name):
         """Handle OPENAPP/LAUNCH command from AI response."""
-        name = name.strip().lower().rstrip(" app").strip()
+        name = name.strip().lower()
+        if name.endswith(" app"):
+            name = name[:-4].strip()
         if name in LOCAL_APP_MAP:
             pkg = LOCAL_APP_MAP[name]
             if _is_package_installed(pkg):
