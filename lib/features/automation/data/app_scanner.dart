@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import '../../../core/constants/app_constants.dart';
 
 class AppInfo {
   final String packageName;
@@ -30,8 +31,8 @@ class AppInfo {
 }
 
 class AppScanner {
-  static const String _cacheFile = 'discovered_apps.json';
-  static const Duration _scanInterval = Duration(hours: 12);
+  static const String _cacheFile = AppConstants.discoveredAppsFile;
+  static const Duration _scanInterval = AppConstants.appScanInterval;
 
   Map<String, AppInfo> _apps = {};
   DateTime? _lastScanTime;

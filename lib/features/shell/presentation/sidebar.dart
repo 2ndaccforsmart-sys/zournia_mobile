@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/zournia_theme.dart';
 
 enum AppView { shell, dashboard, workspace, settings }
 
@@ -30,7 +31,7 @@ class _ShellSidebarState extends State<ShellSidebar> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(color: Color(0xFF141414), border: Border(right: BorderSide(color: Color(0xFF222222)))),
+      decoration: const BoxDecoration(color: ZourniaTheme.shellSurface, border: Border(right: BorderSide(color: ZourniaTheme.shellBorder))),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -58,8 +59,8 @@ class _ShellSidebarState extends State<ShellSidebar> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                               decoration: BoxDecoration(
-                                color: isActive ? const Color(0xFF222222) : Colors.transparent,
-                                border: Border.all(color: isActive ? const Color(0xFF333333) : Colors.transparent),
+                                color: isActive ? ZourniaTheme.shellBorder : Colors.transparent,
+                                border: Border.all(color: isActive ? ZourniaTheme.shellBorderSub : Colors.transparent),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: Row(children: [
@@ -140,7 +141,7 @@ class _SidebarNavItemState extends State<_SidebarNavItem> {
               curve: Curves.easeOut,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
               decoration: BoxDecoration(
-                color: widget.isActive ? const Color(0xFF2B2B2B) : _hovered ? const Color(0xFF1A1A1A) : Colors.transparent,
+                color: widget.isActive ? ZourniaTheme.shellCard : _hovered ? ZourniaTheme.shellSurface : Colors.transparent,
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Row(children: [

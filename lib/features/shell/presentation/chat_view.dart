@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../core/theme/zournia_theme.dart';
 import '../../ui_components/dropdown_menu.dart';
 
 class ChatView extends StatefulWidget {
@@ -105,9 +106,9 @@ class _ChatBubble extends StatelessWidget {
           margin: const EdgeInsets.only(bottom: 16),
           padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
           decoration: BoxDecoration(
-            color: isUser ? const Color(0xFF262626) : Colors.transparent,
+            color: isUser ? ZourniaTheme.shellCard : Colors.transparent,
             borderRadius: BorderRadius.circular(20),
-            border: isUser ? null : Border.all(color: const Color(0xFF333333)),
+            border: isUser ? null : Border.all(color: ZourniaTheme.shellBorder),
           ),
           child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 14, height: 1.5)),
         ),

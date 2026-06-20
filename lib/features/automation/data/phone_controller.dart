@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import '../../../core/constants/app_constants.dart';
 import 'app_scanner.dart';
 
 class PhoneController {
@@ -10,9 +11,9 @@ class PhoneController {
 
   String? _cachedDumpUI;
   DateTime? _cacheTimestamp;
-  static const Duration _cacheTTL = Duration(seconds: 3);
+  static const Duration _cacheTTL = AppConstants.uiDumpCacheTTL;
 
-  static const String _patternsFile = 'learned_patterns.json';
+  static const String _patternsFile = AppConstants.learnedPatternsFile;
   Map<String, int> _patternCounts = {};
   Map<String, String> _learnedIntents = {};
 
@@ -222,7 +223,7 @@ class PhoneController {
 
   Future<String> screenshot() async {
     if (!_isMobile()) return 'SCREENSHOT: only available on Android/Termux.';
-    const path = '/sdcard/zournia_screenshot.png';
+    const path = AppConstants.screenshotPath;
     try {
       final result = await Process.run('screencap', ['-p', path]);
       if (result.exitCode == 0) return 'SCREENSHOT ACK: Saved to $path.';
@@ -238,7 +239,7 @@ class PhoneController {
         DateTime.now().difference(_cacheTimestamp!) < _cacheTTL) {
       return 'DUMPUI ACK (cached): $_cachedDumpUI';
     }
-    const path = '/sdcard/zournia_ui.xml';
+    const path = AppConstants.uiDumpPath;
     try {
       final result = await Process.run('uiautomator', ['dump', path]);
       if (result.exitCode == 0) {
@@ -347,8 +348,8 @@ class PhoneController {
       final file = File(path);
       if (!await file.exists()) return 'READ_FILE ERROR: File not found: $path';
       final content = await file.readAsString();
-      if (content.length > 8000) {
-        return 'READ_FILE ACK: ${content.substring(0, 8000)}\n\n[...truncated, ${content.length} total chars]';
+      if (content.length > AppConstants.fileReadTruncationLimit) {
+        return 'READ_FILE ACK: ${content.substring(0, AppConstants.fileReadTruncationLimit)}\n\n[...truncated, ${content.length} total chars]';
       }
       return 'READ_FILE ACK:\n$content';
     } catch (e) {
@@ -735,7 +736,7 @@ class PhoneController {
   Future<String> camera() async {
     if (!_isMobile()) return 'CAMERA: only available on Android/Termux.';
     try {
-      final r = await Process.run('am', [
+      await Process.run('am', [
         'start', '-a', 'android.media.action.IMAGE_CAPTURE',
       ]);
       return 'CAMERA ACK: Camera opened.';
@@ -747,7 +748,7 @@ class PhoneController {
   Future<String> record() async {
     if (!_isMobile()) return 'RECORD: only available on Android/Termux.';
     try {
-      final r = await Process.run('am', [
+      await Process.run('am', [
         'start', '-a', 'android.media.action.VIDEO_CAPTURE',
       ]);
       return 'RECORD ACK: Video recorder opened.';
@@ -771,7 +772,7 @@ class PhoneController {
   Future<String> mic() async {
     if (!_isMobile()) return 'MIC: only available on Android/Termux.';
     try {
-      final r = await Process.run('am', [
+      await Process.run('am', [
         'start', '-a', 'android.provider.MediaStore.RECORD_SOUND',
       ]);
       return 'MIC ACK: Audio recorder launched.';
@@ -837,7 +838,6 @@ class PhoneController {
     if (!_isDesktop()) return 'DESKTOP_SCREENSHOT: only available on desktop.';
     try {
       if (Platform.isWindows) {
-        final path = '${Platform.environment['USERPROFILE']}\\Desktop\\zournia_screenshot.png';
         await Process.run('snippingtool', []);
         return 'DESKTOP_SCREENSHOT ACK: Screenshot tool opened.';
       } else if (Platform.isMacOS) {

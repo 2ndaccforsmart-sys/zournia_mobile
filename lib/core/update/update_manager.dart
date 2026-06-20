@@ -18,29 +18,24 @@ class UpdateInfo {
 }
 
 class UpdateManager {
-  // Current app version constant
   static const String currentVersion = '1.0.0';
 
-  // Fallback endpoint if config cannot be parsed
-  static const String fallbackUpdateUrl = 
+  static const String fallbackUpdateUrl =
       'https://raw.githubusercontent.com/Daksh/zournia_pc/main/releases/latest.json';
 
-  /// Load config from assets and check the update server for a newer version
+  /// Load config from assets and check the update server for a newer version.
   static Future<UpdateInfo> check() async {
     try {
       String updateUrl = fallbackUpdateUrl;
-      
-      // Load configuration file
+
       try {
         final configText = await rootBundle.loadString('assets/app_config.json');
         final Map<String, dynamic> config = jsonDecode(configText);
         updateUrl = config['update_url'] ?? fallbackUpdateUrl;
-      } catch (e) {
-        // Fallback to default check if assets fail to load
+      } catch (_) {
         updateUrl = fallbackUpdateUrl;
       }
 
-      // Check remote version
       final response = await http.get(Uri.parse(updateUrl)).timeout(
         const Duration(seconds: 8),
       );
@@ -50,7 +45,6 @@ class UpdateManager {
         final String remoteVersion = data['version'] ?? '1.0.0';
         final String zipUrl = data['url'] ?? '';
         final String releaseNotes = data['notes'] ?? 'No release notes available.';
-
         final isAvailable = _compareVersions(remoteVersion, currentVersion);
 
         return UpdateInfo(
@@ -61,7 +55,6 @@ class UpdateManager {
         );
       }
     } catch (e) {
-      // Return empty info if server check fails
       return UpdateInfo(
         version: currentVersion,
         zipUrl: '',
@@ -78,7 +71,7 @@ class UpdateManager {
     );
   }
 
-  /// Perform download and spawn the updater script
+  /// Perform download and spawn the updater script.
   static Future<void> apply(String zipUrl, Function(double) onProgress) async {
     final client = http.Client();
     final request = http.Request('GET', Uri.parse(zipUrl));
@@ -89,7 +82,10 @@ class UpdateManager {
     }
 
     final tempDir = Directory.systemTemp.path;
-    final zipFile = File('$tempDir\\zournia_update.zip');
+    final zipPath = Platform.isWindows
+        ? '$tempDir\\zournia_update.zip'
+        : '$tempDir/zournia_update.zip';
+    final zipFile = File(zipPath);
     final iosSink = zipFile.openWrite();
 
     final totalBytes = response.contentLength ?? 0;
@@ -106,11 +102,10 @@ class UpdateManager {
     await iosSink.close();
     client.close();
 
-    // Start extraction & update batch script
-    await _launchWindowsUpdater(tempDir);
+    await _launchUpdater(tempDir);
   }
 
-  /// Compare semantic version numbers (returns true if version A > version B)
+  /// Compare semantic version numbers (returns true if version A > version B).
   static bool _compareVersions(String verA, String verB) {
     try {
       final List<int> aParts = verA.split('.').map((e) => int.parse(e)).toList();
@@ -122,17 +117,29 @@ class UpdateManager {
         if (valA > valB) return true;
         if (valA < valB) return false;
       }
-    } catch (e) {
-      // Fallback simple compare
+    } catch (_) {
       return verA != verB;
     }
     return false;
   }
 
-  /// Create and launch a detached self-deleting script to execute the update
-  static Future<void> _launchWindowsUpdater(String tempDir) async {
+  /// Create and launch a detached self-deleting script to execute the update.
+  static Future<void> _launchUpdater(String tempDir) async {
     final exePath = Platform.resolvedExecutable;
     final appDir = File(exePath).parent.path;
+    final zipPath = Platform.isWindows
+        ? '$tempDir\\zournia_update.zip'
+        : '$tempDir/zournia_update.zip';
+
+    if (Platform.isWindows) {
+      await _launchWindowsUpdater(tempDir, zipPath, appDir, exePath);
+    } else if (Platform.isMacOS || Platform.isLinux) {
+      await _launchUnixUpdater(tempDir, zipPath, appDir, exePath);
+    }
+  }
+
+  static Future<void> _launchWindowsUpdater(
+      String tempDir, String zipPath, String appDir, String exePath) async {
     final updaterPath = '$tempDir\\zournia_updater.bat';
     final updaterFile = File(updaterPath);
 
@@ -155,7 +162,7 @@ if "%ERRORLEVEL%"=="0" (
 
 echo.
 echo Installing Zournia OS update package...
-powershell -Command "Expand-Archive -Path '$tempDir\\zournia_update.zip' -DestinationPath '$appDir' -Force"
+powershell -Command "Expand-Archive -Path '$zipPath' -DestinationPath '$appDir' -Force"
 
 echo.
 echo Restarting Zournia OS client...
@@ -163,7 +170,7 @@ start "" "$exePath"
 
 echo.
 echo Cleaning up setup package...
-del "$tempDir\\zournia_update.zip"
+del "$zipPath"
 
 :: Self delete batch script
 (goto) 2>nul & del "%~f0"
@@ -171,7 +178,6 @@ del "$tempDir\\zournia_update.zip"
 
     await updaterFile.writeAsString(batContent);
 
-    // Launch updater.bat detached
     await Process.start(
       'cmd.exe',
       ['/c', updaterPath],
@@ -179,7 +185,54 @@ del "$tempDir\\zournia_update.zip"
       mode: ProcessStartMode.detached,
     );
 
-    // Close the current process instantly to let the updater execute
+    exit(0);
+  }
+
+  static Future<void> _launchUnixUpdater(
+      String tempDir, String zipPath, String appDir, String exePath) async {
+    final scriptPath = Platform.isMacOS
+        ? '$tempDir/zournia_updater.sh'
+        : '$tempDir/zournia_updater.sh';
+    final scriptFile = File(scriptPath);
+
+    final String shContent = '''
+#!/bin/bash
+echo "=============================================="
+echo "  ZOURNIA OS - AUTO UPDATE AGENT"
+echo "=============================================="
+echo ""
+echo "Waiting for main application process to exit..."
+sleep 2
+
+# Wait for the main process to exit
+while pgrep -x "zournia" > /dev/null 2>&1; do
+    sleep 1
+done
+
+echo ""
+echo "Installing Zournia OS update package..."
+unzip -o "$zipPath" -d "$appDir"
+
+echo ""
+echo "Restarting Zournia OS client..."
+"$exePath" &
+
+echo ""
+echo "Cleaning up setup package..."
+rm -f "$zipPath"
+rm -f "$scriptPath"
+''';
+
+    await scriptFile.writeAsString(shContent);
+
+    // Make executable and run
+    await Process.start('chmod', ['+x', scriptPath]);
+    await Process.start(
+      'bash',
+      [scriptPath],
+      mode: ProcessStartMode.detached,
+    );
+
     exit(0);
   }
 }
