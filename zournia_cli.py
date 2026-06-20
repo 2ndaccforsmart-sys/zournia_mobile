@@ -161,6 +161,19 @@ def _run(cmd, timeout=5, shell=False):
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, shell=shell)
         return r.stdout.strip(), r.stderr.strip(), r.returncode
+    except FileNotFoundError as e:
+        # If command not found, try with full path for common Android binaries
+        if isinstance(cmd, list) and cmd:
+            bin_name = os.path.basename(cmd[0])
+            for prefix in ["/system/bin", "/vendor/bin"]:
+                full = os.path.join(prefix, bin_name)
+                if os.path.exists(full):
+                    try:
+                        r = subprocess.run([full] + cmd[1:], capture_output=True, text=True, timeout=timeout)
+                        return r.stdout.strip(), r.stderr.strip(), r.returncode
+                    except Exception:
+                        pass
+        return "", str(e), -1
     except Exception as e:
         return "", str(e), -1
 
@@ -631,8 +644,8 @@ class ZourniaCLI:
         path = os.path.join(home, "tmp", "zournia_ss.png")
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
-        subprocess.run(["screencap", "-p", path], capture_output=True, timeout=5)
-        if not os.path.exists(path) or os.path.getsize(path) == 0:
+        out, err, rc = _run(["screencap", "-p", path], timeout=5)
+        if rc != 0 or not os.path.exists(path) or os.path.getsize(path) == 0:
             return "VISION ERROR: Screenshot failed"
 
         with open(path, "rb") as f:
@@ -1263,7 +1276,10 @@ class ZourniaCLI:
             "OPENAPP": lambda p: self._openapp_command(p),
             "LAUNCH": lambda p: self._openapp_command(p),
         }
-        return dispatch[kind](payload)
+        try:
+            return dispatch[kind](payload)
+        except Exception as e:
+            return f"{kind} ERROR: {e}"
 
     def _openapp_command(self, name):
         """Handle OPENAPP/LAUNCH command from AI response."""
